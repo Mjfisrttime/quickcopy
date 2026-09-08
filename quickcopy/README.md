@@ -9,14 +9,15 @@
 
 1. [Introduction](#1-introduction)
 2. [Features](#2-features)
-3. [Supabase Project Setup](#3-supabase-project-setup)
-4. [Database Schema & SQL Table Creation](#4-database-schema--sql-table-creation)
-5. [Row Level Security (RLS) Policies](#5-row-level-security-rls-policies)
-6. [Configuring Credentials in QuickCopy](#6-configuring-credentials-in-quickcopy)
-7. [Running Locally](#7-running-locally)
-8. [Deployment Options](#8-deployment-options)
-9. [Security Architecture & Design Principles](#9-security-architecture--design-principles)
-10. [Troubleshooting & FAQ](#10-troubleshooting--faq)
+3. [ZIP File Import & Export System](#3-zip-file-import--export-system)
+4. [Supabase Project Setup](#4-supabase-project-setup)
+5. [Database Schema & SQL Table Creation](#5-database-schema--sql-table-creation)
+6. [Row Level Security (RLS) Policies](#6-row-level-security-rls-policies)
+7. [Configuring Credentials in QuickCopy](#7-configuring-credentials-in-quickcopy)
+8. [Running Locally](#8-running-locally)
+9. [Deployment Options](#9-deployment-options)
+10. [Security Architecture & Design Principles](#10-security-architecture--design-principles)
+11. [Troubleshooting & FAQ](#11-troubleshooting--faq)
 
 ---
 
@@ -28,6 +29,7 @@ QuickCopy is built with:
 - **Pure Vanilla HTML5, CSS3, and JavaScript (ES6+)**: Zero framework lock-in, zero build steps, zero bloated dependencies.
 - **Supabase JS v2**: Scalable PostgreSQL backend with instant realtime REST endpoints.
 - **Graceful Offline / Demo Mode**: Test and evaluate all features immediately without requiring an active database or account.
+- **JSZip Integration**: Fast, client-side ZIP archive packaging and parsing.
 
 ---
 
@@ -36,6 +38,9 @@ QuickCopy is built with:
 - **⚡ One-Click Copying**: Instant copy to clipboard with tactile visual feedback (`✓ COPIED`).
 - **📋 Copy All**: Combines and copies all currently visible and filtered snippets in a single click formatted as `Title\n\nContent`.
 - **🔍 Real-Time Search & Category Filters**: Search instantly across titles, content, and categories (`Programming`, `Thesis`, `Assignment`, `Commands`, `Notes`, `Links`, `Other`, `General`).
+- **📦 Full & Filtered ZIP Export**: Export all snippets or currently filtered results into a clean, categorized ZIP archive with metadata and README documentation.
+- **📂 ZIP Archive Import**: Drag-and-drop or file picker with interactive preview, per-item selection, and category assignment.
+- **🏷️ Individual Snippet ZIPs**: Instantly download any single snippet packaged as a standalone `.zip` archive from its card footer.
 - **📱 Mobile-First Responsive Design**: Flawless layout on mobile phones, tablets, and ultra-wide desktop monitors.
 - **🛡️ Rock-Solid XSS Protection**: Strict DOM node manipulation (`document.createElement` & `textContent`); zero dynamic `innerHTML` injection of user data.
 - **🔄 Expandable Previews**: Snippets with more than 6 lines or 300 characters are neatly folded with a smooth `"Show more ▼"` / `"Show less ▲"` toggle.
@@ -43,7 +48,58 @@ QuickCopy is built with:
 
 ---
 
-## 3. Supabase Project Setup
+## 3. ZIP File Import & Export System
+
+QuickCopy includes a comprehensive client-side ZIP packaging and restore system powered by [JSZip](https://stuk.github.io/jszip/):
+
+### 3.1 ZIP Export
+- **Toolbar "Export ZIP" Button**:
+  - Located in the search and filter toolbar.
+  - Automatically respects active filters: if search terms or category filters are applied, only matching snippets are packaged. If no filter is active, all snippets are exported.
+  - Button transitions to `"⏳ Generating..."` during processing and `"✓ Downloaded"` upon completion.
+- **Archive Folder Organization**:
+  - Structured cleanly as `snippets/<Category>/<SanitizedTitle>.<ext>`.
+  - Intelligently determines appropriate file extensions:
+    - **Programming**: Detects `.py`, `.html`, `.css`, `.sql`, `.json`, `.ts`, defaulting to `.js`.
+    - **Commands**: Detects `.sql`, `.ps1`, `.bat`, defaulting to `.sh`.
+    - **Notes / Thesis / Assignment**: Detects Markdown (`.md`) or defaults to `.txt`.
+    - **Links / General / Other**: Plain text `.txt`.
+- **Structured Metadata Backup**:
+  - Automatically includes `quickcopy-backup.json` at the root of the archive with the full array of snippet objects (`id`, `title`, `category`, `content`, `created_at`).
+- **Built-in Documentation**:
+  - Generates `README.txt` inside the archive explaining the contents, metadata format, and instructions for restoring into any QuickCopy instance.
+- **Compression**:
+  - Applied with DEFLATE level 6 compression for minimal bandwidth and compact storage.
+- **Single Snippet Download ("📦 ZIP")**:
+  - Each snippet card includes a dedicated `📦 ZIP` button.
+  - Generates an archive containing the source code file, `snippet.json`, and `README.txt`.
+
+### 3.2 ZIP Import
+- **Accessible Modal Dialog**:
+  - Openable via the "Import ZIP" toolbar button or keyboard shortcuts.
+  - Complete with focus trapping, `Escape` key dismiss, and ARIA attributes (`role="dialog"`, `aria-modal="true"`).
+- **Interactive File Dropzone**:
+  - Supports drag-and-drop or clicking to open the native file browser (`accept=".zip"`).
+  - Highlights drop area on drag-over and displays file name with formatted file size.
+- **Category Assignment**:
+  - Allows selecting **"Auto-detect from files"** (default) or forcing an explicit category override across all imported snippets.
+- **Interactive Snippet Preview**:
+  - Extracts and displays all valid snippets before importing.
+  - Shows snippet title, category badge, character count, and code preview.
+  - Individual checkboxes with a **"Select All"** toggle allowing users to choose exactly which snippets to insert.
+- **Safety Checks & Protections**:
+  - **File Size Limit**: Rejects files larger than 25MB to prevent memory exhaustion and zip bomb attacks.
+  - **Path Traversal Protection**: Explicitly validates all file paths to ensure no relative `../` or `..\` traversal escapes.
+  - **Binary File Exclusion**: Automatically ignores images, executables, compiled binaries, and compressed archives.
+  - **System File Filtering**: Automatically ignores macOS resource forks (`__MACOSX`), `.DS_Store`, `.git`, and dotfiles.
+  - **Content & Title Sanitation**: Enforces title limit (100 characters) and content length (10,000 characters).
+  - **Strict XSS Immunity**: Preview cards and notices are built strictly using `document.createElement` and `textContent`.
+- **Database Insertion**:
+  - Works identically in live Supabase mode (batch INSERT via Supabase REST API) and Demo Mode (persisting to browser `localStorage: quickcopy_demo_snippets`).
+
+---
+
+## 4. Supabase Project Setup
 
 Follow these steps to create your free Supabase cloud database:
 
@@ -65,7 +121,7 @@ Follow these steps to create your free Supabase cloud database:
 
 ---
 
-## 4. Database Schema & SQL Table Creation
+## 5. Database Schema & SQL Table Creation
 
 1. In your Supabase project dashboard, open the **SQL Editor** from the left navigation bar.
 2. Click **"New query"**.
@@ -96,7 +152,7 @@ CREATE INDEX IF NOT EXISTS idx_snippets_category ON public.snippets (category);
 
 ---
 
-## 5. Row Level Security (RLS) Policies
+## 6. Row Level Security (RLS) Policies
 
 Row Level Security (RLS) ensures that public, anonymous visitors can read snippets and publish new snippets, but **cannot edit, tamper with, or delete existing snippets**.
 
@@ -137,7 +193,7 @@ WITH CHECK (
 
 ---
 
-## 6. Configuring Credentials in QuickCopy
+## 7. Configuring Credentials in QuickCopy
 
 Open `quickcopy/script.js` in your favorite code editor. At the very top of the file, replace the placeholder constants with your actual Supabase URL and Anon Key:
 
@@ -153,7 +209,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
 
 ---
 
-## 7. Running Locally
+## 8. Running Locally
 
 Because QuickCopy is written in vanilla web technologies, you have multiple ways to run it:
 
@@ -181,7 +237,7 @@ Open `http://localhost:3000`.
 
 ---
 
-## 8. Deployment Options
+## 9. Deployment Options
 
 QuickCopy is a 100% static frontend application. You can deploy it for free on any modern web host:
 
@@ -202,7 +258,7 @@ QuickCopy is a 100% static frontend application. You can deploy it for free on a
 
 ---
 
-## 9. Security Architecture & Design Principles
+## 10. Security Architecture & Design Principles
 
 QuickCopy is built with security-first web standards:
 
@@ -222,12 +278,17 @@ QuickCopy is built with security-first web standards:
    - Modern `navigator.clipboard.writeText` is used when available.
    - An invisible, non-intrusive `document.execCommand('copy')` fallback ensures compatibility in non-HTTPS local environments or older browser engines.
 
+5. **ZIP Archive Security**:
+   - 25MB archive size cap guards against zip bombs and denial-of-service memory exhaustion.
+   - Strict path traversal defense rejects any entries with `../` or `..\`.
+   - File filtering automatically rejects executable/binary payloads.
+
 ---
 
-## 10. Troubleshooting & FAQ
+## 11. Troubleshooting & FAQ
 
 ### Q: Why does the top banner say "Demo Mode"?
-A: This occurs when `SUPABASE_URL` or `SUPABASE_ANON_KEY` in `script.js` still contain the placeholder strings. To switch to your cloud database, follow [Section 6](#6-configuring-credentials-in-quickcopy).
+A: This occurs when `SUPABASE_URL` or `SUPABASE_ANON_KEY` in `script.js` still contain the placeholder strings. To switch to your cloud database, follow [Section 7](#7-configuring-credentials-in-quickcopy).
 
 ### Q: Can I add more categories?
 A: Yes! Simply add `<option value="YourCategory">YourCategory</option>` to both the `#categoryFilter` dropdown and `#snippetCategory` select in `index.html`. QuickCopy's CSS will automatically style it.
