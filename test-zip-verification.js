@@ -90,13 +90,25 @@ function createScriptSandbox(overrides = {}) {
       children: [],
       classList: {
         _classes: new Set(),
-        add(c) { this._classes.add(c); el.className = Array.from(this._classes).join(' '); },
-        remove(c) { this._classes.delete(c); el.className = Array.from(this._classes).join(' '); },
-        contains(c) { return this._classes.has(c); },
+        add(c) {
+          this._classes.add(c);
+          if (!el.className || !el.className.split(/\s+/).includes(c)) {
+            el.className = (el.className ? el.className + ' ' : '') + c;
+          }
+        },
+        remove(c) {
+          this._classes.delete(c);
+          if (el.className) {
+            el.className = el.className.split(/\s+/).filter(x => x && x !== c).join(' ');
+          }
+        },
+        contains(c) {
+          return this._classes.has(c) || (el.className ? el.className.split(/\s+/).includes(c) : false);
+        },
         toggle(c, force) {
-          if (force === undefined) {
-            if (this.contains(c)) this.remove(c); else this.add(c);
-          } else if (force) this.add(c); else this.remove(c);
+          const shouldAdd = force !== undefined ? !!force : !this.contains(c);
+          if (shouldAdd) this.add(c); else this.remove(c);
+          return shouldAdd;
         }
       },
       attributes: {},
@@ -128,19 +140,48 @@ function createScriptSandbox(overrides = {}) {
           }
           return this._btnText;
         }
+        if (selector.startsWith('.')) {
+          const cls = selector.slice(1);
+          function findCls(node) {
+            const hasCls = (node.classList && node.classList.contains(cls)) ||
+                           (node.className && node.className.split(/\s+/).includes(cls));
+            if (hasCls) return node;
+            for (const child of node.children || []) {
+              const found = findCls(child);
+              if (found) return found;
+            }
+            return null;
+          }
+          for (const child of el.children || []) {
+            const found = findCls(child);
+            if (found) return found;
+          }
+          return null;
+        }
         return null;
       },
       querySelectorAll(selector) {
+        const res = [];
         if (selector.includes('.zip-preview-item-checkbox')) {
-          const res = [];
-          function search(item) {
+          function searchCheckbox(item) {
             if (item.className && item.className.includes('zip-preview-item-checkbox')) res.push(item);
-            if (item.children) item.children.forEach(search);
+            if (item.children) item.children.forEach(searchCheckbox);
           }
-          search(el);
+          searchCheckbox(el);
           return res;
         }
-        return [];
+        if (selector.startsWith('.')) {
+          const cls = selector.slice(1);
+          function searchCls(item) {
+            const hasCls = (item.classList && item.classList.contains(cls)) ||
+                           (item.className && item.className.split(/\s+/).includes(cls));
+            if (hasCls) res.push(item);
+            if (item.children) item.children.forEach(searchCls);
+          }
+          (el.children || []).forEach(searchCls);
+          return res;
+        }
+        return res;
       }
     };
 
@@ -174,7 +215,9 @@ function createScriptSandbox(overrides = {}) {
     'uploadZipModal', 'closeZipModalBtn', 'cancelZipModalBtn', 'confirmZipImportBtn',
     'zipDropzone', 'zipFileInput', 'zipFileInfo', 'zipFileName', 'zipFileSize',
     'zipRemoveFileBtn', 'zipCategoryOption', 'zipError', 'zipPreviewSection',
-    'zipPreviewList', 'zipPreviewSummary', 'zipSelectAllCheckbox'
+    'zipPreviewList', 'zipPreviewSummary', 'zipSelectAllCheckbox',
+    'zipModeFull', 'zipModeExtract', 'zipFullDetailsSection', 'zipFullTitle',
+    'zipFullSummary', 'zipFullFileList'
   ];
 
   ids.forEach(id => getOrCreateElement(id));
@@ -187,7 +230,20 @@ function createScriptSandbox(overrides = {}) {
   confirmBtn.appendChild(btnText);
   confirmBtn._btnText = btnText;
 
+  // Initialize errorState children
+  const errorStateEl = elements.get('errorState');
+  const errorTitle = createMockElement('h3');
+  errorTitle.className = 'state-title';
+  const errorDesc = createMockElement('p');
+  errorDesc.className = 'state-desc';
+  errorStateEl.appendChild(errorTitle);
+  errorStateEl.appendChild(errorDesc);
+
   elements.get('zipCategoryOption').value = 'auto';
+  elements.get('zipModeFull').checked = true;
+  elements.get('zipModeExtract').checked = false;
+  elements.get('zipFullDetailsSection').classList.add('hidden');
+  elements.get('zipPreviewSection').classList.add('hidden');
 
   const mockLocalStorage = {
     _data: {},
@@ -197,8 +253,24 @@ function createScriptSandbox(overrides = {}) {
     clear() { this._data = {}; }
   };
 
+  const origLoadAsync = JSZip.loadAsync.bind(JSZip);
+  function wrappedJSZip(...args) {
+    return new JSZip(...args);
+  }
+  Object.assign(wrappedJSZip, JSZip);
+  wrappedJSZip.loadAsync = async (data, options) => {
+    if (data && typeof data.arrayBuffer === 'function') {
+      const ab = await data.arrayBuffer();
+      return origLoadAsync(ab, options);
+    }
+    return origLoadAsync(data, options);
+  };
+
   const sandbox = {
-    JSZip,
+    JSZip: wrappedJSZip,
+    Blob: typeof Blob !== 'undefined' ? Blob : undefined,
+    atob: typeof atob !== 'undefined' ? atob : undefined,
+    btoa: typeof btoa !== 'undefined' ? btoa : undefined,
     console: {
       log: () => {},
       warn: () => {},
@@ -247,6 +319,28 @@ window.__getIsDemoMode = () => isDemoMode;
 window.__setIsDemoMode = (v) => { isDemoMode = v; };
 window.__getSupabaseClient = () => supabaseClient;
 window.__setSupabaseClient = (v) => { supabaseClient = v; };
+window.__getCurrentZipFile = () => currentZipFile;
+window.__setCurrentZipFile = (v) => { currentZipFile = v; };
+window.__getCurrentZipBlob = () => currentZipBlob;
+window.__setCurrentZipBlob = (v) => { currentZipBlob = v; };
+window.__getCurrentZipFilesMeta = () => currentZipFilesMeta;
+window.__setCurrentZipFilesMeta = (v) => { currentZipFilesMeta = v; };
+window.__getZipModeFull = () => zipModeFull;
+window.__getZipModeExtract = () => zipModeExtract;
+window.__getZipFullDetailsSection = () => zipFullDetailsSection;
+window.__getZipFullTitle = () => zipFullTitle;
+window.__getZipFullSummary = () => zipFullSummary;
+window.__getZipFullFileList = () => zipFullFileList;
+window.isFullZipSnippet = isFullZipSnippet;
+window.parseZipDescriptor = parseZipDescriptor;
+window.createFullZipCardElement = createFullZipCardElement;
+window.createSnippetCardElement = createSnippetCardElement;
+window.downloadFullZipSnippet = downloadFullZipSnippet;
+window.extractAndSplitZipSnippet = extractAndSplitZipSnippet;
+window.getZipUploadMode = getZipUploadMode;
+window.updateZipModalModeUI = updateZipModalModeUI;
+window.saveFullZipSnippet = saveFullZipSnippet;
+window.downloadSingleSnippetZip = downloadSingleSnippetZip;
 `;
 
   vm.createContext(sandbox);
@@ -359,6 +453,41 @@ async function runAllSuites() {
     assert(htmlContent.includes('id="confirmZipImportBtn"'), 'confirmZipImportBtn exists');
     assert(htmlContent.includes('id="cancelZipModalBtn"'), 'cancelZipModalBtn exists');
     assert(htmlContent.includes('id="closeZipModalBtn"'), 'closeZipModalBtn exists');
+  });
+
+  s2.test('Upload mode radio buttons (#zipModeFull checked by default and #zipModeExtract) in HTML', () => {
+    assert(htmlContent.includes('id="zipModeFull"'), 'Radio button #zipModeFull exists');
+    assert(htmlContent.includes('id="zipModeExtract"'), 'Radio button #zipModeExtract exists');
+    assert(/<input[^>]+id="zipModeFull"[^>]*checked/i.test(htmlContent) || /<input[^>]+checked[^>]*id="zipModeFull"/i.test(htmlContent), '#zipModeFull is checked by default');
+    assert(htmlContent.includes('name="zipUploadMode"'), 'Radio group name="zipUploadMode" exists');
+    assert(htmlContent.includes('role="radiogroup"'), 'Accessible role="radiogroup" exists');
+  });
+
+  s2.test('Full ZIP details section elements exist in HTML (#zipFullDetailsSection, #zipFullTitle, #zipFullSummary, #zipFullFileList)', () => {
+    assert(htmlContent.includes('id="zipFullDetailsSection"'), 'Container #zipFullDetailsSection exists');
+    assert(htmlContent.includes('id="zipFullTitle"'), 'Title input #zipFullTitle exists');
+    assert(htmlContent.includes('id="zipFullSummary"'), 'Summary display #zipFullSummary exists');
+    assert(htmlContent.includes('id="zipFullFileList"'), 'File list #zipFullFileList exists');
+  });
+
+  s2.test('"ZIP Archive" category option is present in #categoryFilter, #snippetCategory, and #zipCategoryOption', () => {
+    const filterMatch = htmlContent.match(/<select id="categoryFilter"[\s\S]*?<\/select>/i);
+    assert(filterMatch && filterMatch[0].includes('value="ZIP Archive"'), '"ZIP Archive" in #categoryFilter');
+
+    const modalMatch = htmlContent.match(/<select id="snippetCategory"[\s\S]*?<\/select>/i);
+    assert(modalMatch && modalMatch[0].includes('value="ZIP Archive"'), '"ZIP Archive" in #snippetCategory');
+
+    const zipCatMatch = htmlContent.match(/<select id="zipCategoryOption"[\s\S]*?<\/select>/i);
+    assert(zipCatMatch && zipCatMatch[0].includes('value="ZIP Archive"'), '"ZIP Archive" in #zipCategoryOption');
+  });
+
+  s2.test('CSS contains all required Full ZIP styling rules and badge classes', () => {
+    assert(cssContent.includes('.badge-ziparchive'), 'CSS contains .badge-ziparchive');
+    assert(cssContent.includes('.snippet-card-zip'), 'CSS contains .snippet-card-zip');
+    assert(cssContent.includes('.zip-card-overview'), 'CSS contains .zip-card-overview');
+    assert(cssContent.includes('.zip-card-filelist'), 'CSS contains .zip-card-filelist');
+    assert(cssContent.includes('.btn-card-zip-primary'), 'CSS contains .btn-card-zip-primary');
+    assert(cssContent.includes('.btn-card-extract'), 'CSS contains .btn-card-extract');
   });
 
   // ============================================================================
@@ -511,6 +640,114 @@ async function runAllSuites() {
     assertEqual(snippet.content.length, 10000, 'Content truncated to exactly 10,000 chars');
   });
 
+  s3.test('Edge Case 3.9: Full ZIP snippet identification via isFullZipSnippet(snippet)', () => {
+    const { sandbox } = createScriptSandbox();
+    const isFullZip = sandbox.isFullZipSnippet;
+
+    // Valid descriptors
+    assert(isFullZip({ content: '{"__quickcopy_zip__":true,"fileName":"app.zip"}' }), 'Recognizes {"__quickcopy_zip__":true');
+    assert(isFullZip({ content: '{"__quickcopy_zip__": true,"fileName":"app.zip"}' }), 'Recognizes {"__quickcopy_zip__": true');
+    assert(isFullZip({ category: 'ZIP Archive', content: '  {"__quickcopy_zip__": true, "files": []}  ' }), 'Recognizes category ZIP Archive with descriptor');
+
+    // Negative cases
+    assert(!isFullZip(null), 'Null snippet returns false');
+    assert(!isFullZip(undefined), 'Undefined snippet returns false');
+    assert(!isFullZip({}), 'Empty snippet returns false');
+    assert(!isFullZip({ content: '' }), 'Empty content returns false');
+    assert(!isFullZip({ category: 'Programming', content: 'const x = 10;' }), 'Normal code snippet returns false');
+    assert(!isFullZip({ category: 'ZIP Archive', content: 'This is not a zip descriptor' }), 'ZIP Archive category without descriptor returns false');
+  });
+
+  await s3.testAsync('Edge Case 3.10: Single snippet ZIP export produces clean archive with single code file and no README.txt', async () => {
+    const { sandbox, downloads } = createScriptSandbox();
+
+    const snippet = {
+      title: 'CalculateMetrics',
+      category: 'Programming',
+      content: 'def calculate_metrics():\n    return {"precision": 0.95, "recall": 0.92}'
+    };
+
+    const mockBtn = sandbox.document.createElement('button');
+    await sandbox.downloadSingleSnippetZip(snippet, mockBtn);
+
+    assertEqual(downloads.length, 1, 'Download triggered exactly once');
+    const blob = downloads[0];
+
+    // Load generated ZIP and inspect contents
+    const arrayBuffer = await blob.arrayBuffer();
+    const loadedZip = await JSZip.loadAsync(arrayBuffer);
+    const fileNames = Object.keys(loadedZip.files).filter(fn => !loadedZip.files[fn].dir);
+
+    assertEqual(fileNames.length, 1, 'Archive contains exactly one single code file');
+    assertEqual(fileNames[0], 'CalculateMetrics.py', 'File name correctly inferred from title and Python content heuristic');
+    assert(!fileNames.includes('README.txt'), 'Single snippet ZIP does NOT include redundant README.txt');
+    assert(!fileNames.includes('snippet.json'), 'Single snippet ZIP does NOT include snippet.json');
+
+    const fileContent = await loadedZip.file('CalculateMetrics.py').async('string');
+    assertEqual(fileContent, snippet.content, 'Code content inside archive matches original snippet exactly');
+  });
+
+  s3.test('Edge Case 3.11: Full ZIP card rendering, file count/size display, and strict XSS defense via createSnippetCardElement(snippet)', () => {
+    const { sandbox } = createScriptSandbox();
+
+    const fullZipSnippet = {
+      id: 'snippet-zip-1',
+      title: '<script>alert("xss")</script>Project Backup',
+      category: 'ZIP Archive',
+      created_at: new Date().toISOString(),
+      content: JSON.stringify({
+        __quickcopy_zip__: true,
+        fileName: 'project-backup.zip',
+        fileSize: 4096,
+        fileCount: 3,
+        files: [
+          { name: '<script>alert("xss1")</script>server.js', size: 1024 },
+          { name: '<b onmouseover="alert(1)">styles.css</b>', size: 1024 },
+          { name: 'README.md', size: 2048 }
+        ]
+      })
+    };
+
+    const card = sandbox.createSnippetCardElement(fullZipSnippet);
+
+    // Verify card wrapper and styling
+    assert(card.classList.contains('snippet-card-zip'), 'Card has snippet-card-zip class');
+    assert(card.getAttribute('data-id') === 'snippet-zip-1', 'Card data-id attribute set');
+
+    // Verify overview box (.zip-card-overview)
+    const overviewEl = card.querySelector('.zip-card-overview');
+    assert(overviewEl !== null, 'Overview box element (.zip-card-overview) exists');
+    assert(overviewEl.textContent.includes('3 files'), 'Overview displays correct file count (3 files)');
+    assert(overviewEl.textContent.includes('4 KB'), 'Overview displays formatted file size (4 KB)');
+
+    // Verify file list (.zip-card-filelist)
+    const fileListEl = card.querySelector('.zip-card-filelist');
+    assert(fileListEl !== null, 'File list container (.zip-card-filelist) exists');
+    const fileItems = fileListEl.querySelectorAll('.zip-card-file-item');
+    assertEqual(fileItems.length, 3, 'File list renders all 3 files');
+
+    // Strict XSS Prevention: ensure filenames are rendered as textContent, no script tags
+    function verifyNoInjectedTags(node) {
+      assert(!node.innerHTML.includes('<script>alert'), 'Strict XSS defense: No unescaped <script> tags');
+      assert(!node.innerHTML.includes('onmouseover='), 'Strict XSS defense: No unescaped event handlers');
+      if (node.children) node.children.forEach(verifyNoInjectedTags);
+    }
+    verifyNoInjectedTags(card);
+
+    // Verify the three action buttons: "Download ZIP", "Extract & Split", and "Copy Info"
+    const downloadBtn = card.querySelector('.btn-card-zip-primary');
+    assert(downloadBtn !== null, 'Primary ZIP download button (.btn-card-zip-primary) exists');
+    assert(downloadBtn.textContent.includes('Download ZIP'), 'Download button text contains "Download ZIP"');
+
+    const extractBtn = card.querySelector('.btn-card-extract');
+    assert(extractBtn !== null, 'Extract & Split button (.btn-card-extract) exists');
+    assert(extractBtn.textContent.includes('Extract & Split'), 'Extract button text contains "Extract & Split"');
+
+    const copyBtns = card.querySelectorAll('.btn-copy');
+    const copyInfoBtn = copyBtns.find(b => b.textContent && b.textContent.includes('Copy Info'));
+    assert(copyInfoBtn !== undefined, 'Copy Info button exists with text "Copy Info"');
+  });
+
   // ============================================================================
   // POINT 4: Error Handling & Stack Leak Prevention
   // ============================================================================
@@ -640,6 +877,90 @@ async function runAllSuites() {
     assertEqual(capturedPayload.length, 2, 'Inserts 2 snippets in batch');
     assertEqual(capturedPayload[0].title, 'Cloud Snippet 1', 'Title correctly mapped in payload');
     assertEqual(capturedPayload[0].category, 'Programming', 'Category correctly mapped in payload');
+  });
+
+  s5.test('Integration 5.3: Mode toggle logic switches UI sections and updates button label', () => {
+    const { sandbox, elements } = createScriptSandbox();
+    const modeFull = elements.get('zipModeFull');
+    const modeExtract = elements.get('zipModeExtract');
+    const fullSection = elements.get('zipFullDetailsSection');
+    const previewSection = elements.get('zipPreviewSection');
+    const confirmBtn = elements.get('confirmZipImportBtn');
+    const catSelect = elements.get('zipCategoryOption');
+
+    // Simulate file selected
+    sandbox.__setCurrentZipFile({ name: 'archive.zip', size: 12000 });
+    sandbox.__setParsedZipSnippets([
+      { title: 'Item 1', category: 'Notes', content: 'Note 1', checked: true }
+    ]);
+
+    // Test 1: Full mode state
+    modeFull.checked = true;
+    modeExtract.checked = false;
+    catSelect.value = 'auto';
+    sandbox.updateZipModalModeUI();
+
+    assert(!fullSection.classList.contains('hidden'), 'Full ZIP details section visible in "full" mode');
+    assert(previewSection.classList.contains('hidden'), 'Snippet preview section hidden in "full" mode');
+    assertEqual(confirmBtn.querySelector('.btn-text').textContent, 'Save Full ZIP File', 'Confirm button text updated to "Save Full ZIP File"');
+    assertEqual(catSelect.value, 'ZIP Archive', 'Category auto-switches to "ZIP Archive" when "full" mode selected');
+
+    // Test 2: Extract mode state
+    modeExtract.checked = true;
+    modeFull.checked = false;
+    sandbox.updateZipModalModeUI();
+
+    assert(fullSection.classList.contains('hidden'), 'Full ZIP details section hidden in "extract" mode');
+    assert(!previewSection.classList.contains('hidden'), 'Snippet preview section visible in "extract" mode');
+    assert(confirmBtn.querySelector('.btn-text').textContent.includes('Import') && confirmBtn.querySelector('.btn-text').textContent.includes('Snippet'), 'Confirm button text updated to "Import Snippet(s)"');
+    assertEqual(catSelect.value, 'auto', 'Category switches to "auto" when extract mode selected');
+  });
+
+  await s5.testAsync('Integration 5.4: Full ZIP card action handlers (downloadFullZipSnippet and extractAndSplitZipSnippet)', async () => {
+    const { sandbox, downloads } = createScriptSandbox();
+
+    // Prepare a valid ZIP file in base64
+    const zip = new JSZip();
+    zip.file('extracted_module.js', 'export const pi = 3.14159;');
+    const base64Data = await zip.generateAsync({ type: 'base64' });
+
+    const fullZipSnippet = {
+      id: 'test-zip-snippet-id',
+      title: 'my-math-lib.zip',
+      category: 'ZIP Archive',
+      created_at: new Date().toISOString(),
+      content: JSON.stringify({
+        __quickcopy_zip__: true,
+        fileName: 'my-math-lib.zip',
+        fileSize: 500,
+        fileCount: 1,
+        files: [{ name: 'extracted_module.js', size: 30 }],
+        base64: base64Data
+      })
+    };
+
+    // 1. Test downloadFullZipSnippet
+    const mockDownloadBtn = sandbox.document.createElement('button');
+    mockDownloadBtn.textContent = '📥 Download ZIP';
+    await sandbox.downloadFullZipSnippet(fullZipSnippet, mockDownloadBtn);
+
+    assertEqual(downloads.length, 1, 'Full ZIP blob download triggered');
+    assert(mockDownloadBtn.textContent.includes('Downloaded'), 'Button text updated after download');
+
+    // 2. Test extractAndSplitZipSnippet in Demo Mode
+    sandbox.__setIsDemoMode(true);
+    sandbox.__setAllSnippets([fullZipSnippet]);
+
+    const mockExtractBtn = sandbox.document.createElement('button');
+    mockExtractBtn.textContent = '📂 Extract & Split';
+    await sandbox.extractAndSplitZipSnippet(fullZipSnippet, mockExtractBtn);
+
+    const all = sandbox.__getAllSnippets();
+    assert(all.length >= 2, 'Snippet extracted and added to allSnippets list');
+    const extractedSnippet = all.find(s => s.title === 'extracted_module');
+    assert(extractedSnippet !== undefined, 'Found extracted snippet in collection');
+    assertEqual(extractedSnippet.content, 'export const pi = 3.14159;', 'Extracted content intact');
+    assertEqual(extractedSnippet.category, 'Programming', 'Category inferred correctly as Programming');
   });
 
   // ============================================================================
@@ -807,7 +1128,9 @@ async function runAllSuites() {
       'cancelZipModalBtn', 'confirmZipImportBtn', 'zipDropzone', 'zipFileInput',
       'zipFileInfo', 'zipFileName', 'zipFileSize', 'zipRemoveFileBtn',
       'zipCategoryOption', 'zipError', 'zipPreviewSection', 'zipPreviewList',
-      'zipPreviewSummary', 'zipSelectAllCheckbox'
+      'zipPreviewSummary', 'zipSelectAllCheckbox',
+      'zipModeFull', 'zipModeExtract', 'zipFullDetailsSection', 'zipFullTitle',
+      'zipFullSummary', 'zipFullFileList'
     ];
 
     referencedIds.forEach(id => {
@@ -831,12 +1154,12 @@ async function runAllSuites() {
   });
 
   // ============================================================================
-  // POINT 11: Inconsistency Audit
+  // POINT 11: Inconsistency Audit Between Components
   // ============================================================================
   const s11 = startSuite('Point 11: Inconsistency Audit Between Components');
 
   s11.test('Synchronized category definitions between #zipCategoryOption, #categoryFilter, and #snippetCategory', () => {
-    const standardCategories = ['General', 'Programming', 'Thesis', 'Assignment', 'Commands', 'Notes', 'Links', 'Other'];
+    const standardCategories = ['General', 'Programming', 'Thesis', 'Assignment', 'Commands', 'Notes', 'Links', 'Other', 'ZIP Archive'];
 
     standardCategories.forEach(cat => {
       assert(htmlContent.includes(`<option value="${cat}">${cat}</option>`) || htmlContent.includes(`value="${cat}"`), `Category ${cat} in dropdowns`);
@@ -848,8 +1171,8 @@ async function runAllSuites() {
     });
   });
 
-  s11.test('CSS category badges defined for all valid categories', () => {
-    const standardCategories = ['general', 'programming', 'thesis', 'assignment', 'commands', 'notes', 'links', 'other'];
+  s11.test('CSS category badges defined for all valid categories including ZIP Archive', () => {
+    const standardCategories = ['general', 'programming', 'thesis', 'assignment', 'commands', 'notes', 'links', 'other', 'ziparchive'];
     standardCategories.forEach(cat => {
       assert(cssContent.includes(`.badge-${cat}`), `CSS contains .badge-${cat}`);
     });

@@ -37,10 +37,10 @@ QuickCopy is built with:
 
 - **⚡ One-Click Copying**: Instant copy to clipboard with tactile visual feedback (`✓ COPIED`).
 - **📋 Copy All**: Combines and copies all currently visible and filtered snippets in a single click formatted as `Title\n\nContent`.
-- **🔍 Real-Time Search & Category Filters**: Search instantly across titles, content, and categories (`Programming`, `Thesis`, `Assignment`, `Commands`, `Notes`, `Links`, `Other`, `General`).
+- **🔍 Real-Time Search & Category Filters**: Search instantly across titles, content, and categories (`Programming`, `Thesis`, `Assignment`, `Commands`, `Notes`, `Links`, `Other`, `General`, and `ZIP Archive`).
 - **📦 Full & Filtered ZIP Export**: Export all snippets or currently filtered results into a clean, categorized ZIP archive with metadata and README documentation.
-- **📂 ZIP Archive Import**: Drag-and-drop or file picker with interactive preview, per-item selection, and category assignment.
-- **🏷️ Individual Snippet ZIPs**: Instantly download any single snippet packaged as a standalone `.zip` archive from its card footer.
+- **📂 Full ZIP Storage & Extraction**: Upload ZIP archives with two flexible modes: save the intact archive as a unified card under category `ZIP Archive` (with file list preview and 1-click download/extract), or split into individual snippet cards.
+- **🏷️ Clean Single Snippet ZIPs**: Instantly download any single snippet packaged as a clean standalone `.zip` archive containing only the source file (zero extraneous readme/json files).
 - **📱 Mobile-First Responsive Design**: Flawless layout on mobile phones, tablets, and ultra-wide desktop monitors.
 - **🛡️ Rock-Solid XSS Protection**: Strict DOM node manipulation (`document.createElement` & `textContent`); zero dynamic `innerHTML` injection of user data.
 - **🔄 Expandable Previews**: Snippets with more than 6 lines or 300 characters are neatly folded with a smooth `"Show more ▼"` / `"Show less ▲"` toggle.
@@ -70,23 +70,30 @@ QuickCopy includes a comprehensive client-side ZIP packaging and restore system 
   - Generates `README.txt` inside the archive explaining the contents, metadata format, and instructions for restoring into any QuickCopy instance.
 - **Compression**:
   - Applied with DEFLATE level 6 compression for minimal bandwidth and compact storage.
-- **Single Snippet Download ("📦 ZIP")**:
-  - Each snippet card includes a dedicated `📦 ZIP` button.
-  - Generates an archive containing the source code file, `snippet.json`, and `README.txt`.
+- **Clean Single Snippet Download ("📦 ZIP")**:
+  - Each standard snippet card includes a dedicated `📦 ZIP` button.
+  - Generates a clean archive containing solely the source code file without extraneous readme or metadata files.
 
-### 3.2 ZIP Import
+### 3.2 ZIP Import & Full ZIP Workflow
 - **Accessible Modal Dialog**:
   - Openable via the "Import ZIP" toolbar button or keyboard shortcuts.
   - Complete with focus trapping, `Escape` key dismiss, and ARIA attributes (`role="dialog"`, `aria-modal="true"`).
+- **Two Import Modes (Radio Selection)**:
+  - **Save as Full ZIP File (Default)**:
+    - Preserves the uploaded archive intact as a single snippet card categorized as `"ZIP Archive"`.
+    - Features an overview summary box (`📦 ZIP Archive • X files • Y KB`).
+    - Scrollable file list preview detailing filenames and sizes inside the archive.
+    - **"📥 Download ZIP"**: 1-click download of the complete original archive.
+    - **"📂 Extract & Split"**: Decompresses and expands all text/code files into individual snippet cards on demand.
+    - **"📋 Copy Info"**: Copies formatted archive contents and file manifest to the clipboard.
+  - **Extract & Split into Individual Snippets**:
+    - Decompresses the archive immediately and extracts valid text and code files into separate snippet cards.
+    - Provides interactive preview list with individual checkboxes and a `"Select All"` toggle.
 - **Interactive File Dropzone**:
   - Supports drag-and-drop or clicking to open the native file browser (`accept=".zip"`).
   - Highlights drop area on drag-over and displays file name with formatted file size.
 - **Category Assignment**:
-  - Allows selecting **"Auto-detect from files"** (default) or forcing an explicit category override across all imported snippets.
-- **Interactive Snippet Preview**:
-  - Extracts and displays all valid snippets before importing.
-  - Shows snippet title, category badge, character count, and code preview.
-  - Individual checkboxes with a **"Select All"** toggle allowing users to choose exactly which snippets to insert.
+  - Allows selecting **"Auto-detect from files"**, **"ZIP Archive"**, or explicit category overrides.
 - **Safety Checks & Protections**:
   - **File Size Limit**: Rejects files larger than 25MB to prevent memory exhaustion and zip bomb attacks.
   - **Path Traversal Protection**: Explicitly validates all file paths to ensure no relative `../` or `..\` traversal escapes.
@@ -94,8 +101,8 @@ QuickCopy includes a comprehensive client-side ZIP packaging and restore system 
   - **System File Filtering**: Automatically ignores macOS resource forks (`__MACOSX`), `.DS_Store`, `.git`, and dotfiles.
   - **Content & Title Sanitation**: Enforces title limit (100 characters) and content length (10,000 characters).
   - **Strict XSS Immunity**: Preview cards and notices are built strictly using `document.createElement` and `textContent`.
-- **Database Insertion**:
-  - Works identically in live Supabase mode (batch INSERT via Supabase REST API) and Demo Mode (persisting to browser `localStorage: quickcopy_demo_snippets`).
+- **Database Insertion & Offline Persistence**:
+  - Full ZIP binary payloads are cached in client-side IndexedDB (`quickcopy_zip_db`), with compact descriptors saved in Supabase or `localStorage: quickcopy_demo_snippets`.
 
 ---
 

@@ -76,6 +76,7 @@
               <option value="Notes">Notes</option>
               <option value="Links">Links</option>
               <option value="Other">Other</option>
+              <option value="ZIP Archive">ZIP Archive</option>
             </select>
           </div>
 
@@ -178,6 +179,7 @@
             <option value="Notes">Notes</option>
             <option value="Links">Links</option>
             <option value="Other">Other</option>
+            <option value="ZIP Archive">ZIP Archive</option>
           </select>
         </div>
 
@@ -221,6 +223,24 @@
         <!-- Error Container -->
         <div id="zipError" class="form-error hidden" role="alert"></div>
 
+        <!-- Upload Mode Selection -->
+        <div class="zip-mode-selector-group" role="radiogroup" aria-label="ZIP upload mode">
+          <label class="zip-mode-card" for="zipModeFull">
+            <input type="radio" id="zipModeFull" name="zipUploadMode" value="full" checked>
+            <div class="zip-mode-content">
+              <span class="zip-mode-title">📦 Save as Full ZIP File (Single Download File)</span>
+              <span class="zip-mode-desc">Keeps the archive intact as a single item with a direct 1-click download button, and an option to extract anytime.</span>
+            </div>
+          </label>
+          <label class="zip-mode-card" for="zipModeExtract">
+            <input type="radio" id="zipModeExtract" name="zipUploadMode" value="extract">
+            <div class="zip-mode-content">
+              <span class="zip-mode-title">📂 Extract &amp; Split into Individual Snippets</span>
+              <span class="zip-mode-desc">Extracts all files inside the archive into separate individual snippet cards.</span>
+            </div>
+          </label>
+        </div>
+
         <!-- File Dropzone container -->
         <div id="zipDropzone" class="zip-dropzone" tabindex="0" role="button" aria-label="Drag and drop or browse for zip file">
           <div class="zip-dropzone-icon" aria-hidden="true">📦</div>
@@ -241,11 +261,25 @@
           <button type="button" id="zipRemoveFileBtn" class="zip-remove-file-btn" aria-label="Remove selected file">&times;</button>
         </div>
 
+        <!-- Full ZIP details section -->
+        <div id="zipFullDetailsSection" class="zip-full-details hidden">
+          <div class="form-group">
+            <label for="zipFullTitle">Archive Title <span class="required" aria-hidden="true">*</span></label>
+            <input type="text" id="zipFullTitle" class="form-input" maxlength="100" placeholder="e.g. my-project.zip" autocomplete="off">
+          </div>
+          <div id="zipFullSummary" class="zip-full-summary"></div>
+          <div class="zip-full-files-wrapper">
+            <div class="zip-full-files-label">Files inside archive:</div>
+            <div id="zipFullFileList" class="zip-full-file-list" role="region" aria-label="Archive file contents"></div>
+          </div>
+        </div>
+
         <!-- Category option dropdown -->
-        <div class="form-group">
+        <div class="form-group" id="zipCategoryGroup">
           <label for="zipCategoryOption">Assign Category</label>
           <select id="zipCategoryOption" class="category-select">
-            <option value="auto" selected>Auto-detect from files</option>
+            <option value="ZIP Archive" selected>ZIP Archive</option>
+            <option value="auto">Auto-detect from files</option>
             <option value="General">General</option>
             <option value="Programming">Programming</option>
             <option value="Thesis">Thesis</option>
@@ -274,7 +308,7 @@
       <div class="modal-actions modal-footer-border">
         <button type="button" id="cancelZipModalBtn" class="btn btn-outline">Cancel</button>
         <button type="button" id="confirmZipImportBtn" class="btn btn-primary" disabled>
-          <span class="btn-text">Import Snippets</span>
+          <span class="btn-text">Save Full ZIP File</span>
         </button>
       </div>
     </div>

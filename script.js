@@ -1,128 +1,70 @@
-/**
- * ============================================================================
- * QuickCopy — Modern Snippet Sharing Application
- * ============================================================================
- */
-
-// ==========================================
-// 1. SUPABASE CONFIGURATION
-// ==========================================
-// Replace these with your actual Supabase project credentials.
-// Find them at: https://supabase.com/dashboard/project/_/settings/api
 const SUPABASE_URL = "https://llnxlxocfzeqqkqocxsa.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsbnhseG9jZnplcXFrcW9jeHNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NDA4NDMsImV4cCI6MjEwNDMxNjg0M30.i5gtm504ky0xNQaAkUrFZWEdChG57HpCvxoeFNvLsfg";
 
-// ==========================================
-// 2. APPLICATION STATE & CLIENT SETUP
-// ==========================================
-let supabaseClient = null;
-let allSnippets = [];
-let currentFilteredSnippets = [];
-let isDemoMode = false;
-let toastTimeoutId = null;
-let lastFocusedElement = null;
+let supabaseClient = null, allSnippets = [], currentFilteredSnippets = [], isDemoMode = false, toastTimeoutId = null, lastFocusedElement = null;
 
-// Initial sample seed data for demo / offline testing
 const INITIAL_DEMO_SNIPPETS = [
   {
     id: "demo-1",
     title: "Docker Compose for PostgreSQL",
     category: "Commands",
-    content: "services:\n  postgres:\n    image: postgres:16-alpine\n    restart: always\n    environment:\n      POSTGRES_USER: admin\n      POSTGRES_PASSWORD: secretpassword\n      POSTGRES_DB: quickcopy_db\n    ports:\n      - \"5432:5432\"\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n\nvolumes:\n  pgdata:",
-    created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString() // 15 mins ago
+    content: "services:\n  postgres:\n    image: postgres:16-alpine\n    ports:\n      - \"5432:5432\"",
+    created_at: new Date(Date.now() - 900000).toISOString()
   },
   {
     id: "demo-2",
     title: "React Custom Hook: useDebounce",
     category: "Programming",
-    content: "import { useState, useEffect } from 'react';\n\nexport function useDebounce(value, delay = 300) {\n  const [debouncedValue, setDebouncedValue] = useState(value);\n\n  useEffect(() => {\n    const timer = setTimeout(() => setDebouncedValue(value), delay);\n    return () => clearTimeout(timer);\n  }, [value, delay]);\n\n  return debouncedValue;\n}",
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString() // 2 hours ago
-  },
-  {
-    id: "demo-3",
-    title: "Thesis Methodology Outline",
-    category: "Thesis",
-    content: "Chapter 3: Methodology\n\n3.1 Research Design (Mixed Methods Approach)\n3.2 Population & Sampling Strategy (Stratified random sample, N=250)\n3.3 Data Collection Instruments (Structured surveys & semi-structured interviews)\n3.4 Reliability and Validity Verification (Cronbach's Alpha > 0.82)\n3.5 Ethical Considerations (Institutional Review Board approval & informed consent)\n3.6 Data Analysis Framework (SPSS descriptive statistics & NVivo thematic coding)",
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() // 1 day ago
-  },
-  {
-    id: "demo-4",
-    title: "Git Undo Last Commit (Keep Changes)",
-    category: "Commands",
-    content: "# Soft reset undoes the last commit but leaves your changes staged:\ngit reset --soft HEAD~1\n\n# Mixed reset (default) undoes commit and unstages changes:\ngit reset HEAD~1\n\n# To completely discard the last commit and all changes (CAUTION):\ngit reset --hard HEAD~1",
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString() // 2 days ago
-  },
-  {
-    id: "demo-5",
-    title: "Assignment Citation Formats (APA 7th)",
-    category: "Assignment",
-    content: "Journal Article:\nAuthor, A. A., & Author, B. B. (Year). Title of article. Title of Periodical, volume(issue), pp-pp. https://doi.org/xxxx\n\nBook:\nAuthor, A. A. (Year). Title of work: Capital letter also for subtitle (edition). Publisher.\n\nWebsite:\nAuthor, A. A. (Year, Month Day). Title of web page. Website Name. URL",
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString() // 3 days ago
+    content: "import { useState, useEffect } from 'react';\nexport function useDebounce(value, delay = 300) {\n  const [debounced, setDebounced] = useState(value);\n  useEffect(() => {\n    const timer = setTimeout(() => setDebounced(value), delay);\n    return () => clearTimeout(timer);\n  }, [value, delay]);\n  return debounced;\n}",
+    created_at: new Date(Date.now() - 7200000).toISOString()
   }
 ];
 
-// ==========================================
-// 3. DOM ELEMENTS
-// ==========================================
-let searchInput;
-let clearSearchBtn;
-let categoryFilter;
-let copyAllBtn;
-let openCreateBtn;
-let emptyCreateBtn;
-let retryBtn;
-let snippetsGrid;
-let loadingState;
-let emptyState;
-let errorState;
-let resultsCount;
-let activeFilterTag;
-let demoBanner;
-let dismissBannerBtn;
+let searchInput, clearSearchBtn, categoryFilter, copyAllBtn, openCreateBtn, emptyCreateBtn, retryBtn;
+let snippetsGrid, loadingState, emptyState, errorState, resultsCount, activeFilterTag, demoBanner, dismissBannerBtn;
+let createModal, closeModalBtn, cancelModalBtn, createSnippetForm, snippetTitle, snippetCategory, snippetContent;
+let titleCharCount, contentCharCount, formError, saveSnippetBtn;
+let downloadZipBtn, uploadZipBtn, uploadZipModal, closeZipModalBtn, cancelZipModalBtn, confirmZipImportBtn;
+let zipDropzone, zipFileInput, zipFileInfo, zipFileName, zipFileSize, zipRemoveFileBtn, zipCategoryOption, zipError;
+let zipPreviewSection, zipPreviewSummary, zipSelectAllCheckbox, zipPreviewList;
+let zipModeFull, zipModeExtract, zipFullDetailsSection, zipFullTitle, zipFullSummary, zipFullFileList;
+let toast, toastMessage;
 
-// Modal Elements
-let createModal;
-let closeModalBtn;
-let cancelModalBtn;
-let createSnippetForm;
-let snippetTitle;
-let snippetCategory;
-let snippetContent;
-let titleCharCount;
-let contentCharCount;
-let formError;
-let saveSnippetBtn;
+let parsedZipSnippets = [], currentZipFile = null, currentZipBlob = null, currentZipFilesMeta = [];
 
-// ZIP Toolbar & Modal Elements
-let downloadZipBtn;
-let uploadZipBtn;
-let uploadZipModal;
-let closeZipModalBtn;
-let cancelZipModalBtn;
-let confirmZipImportBtn;
-let zipDropzone;
-let zipFileInput;
-let zipFileInfo;
-let zipFileName;
-let zipFileSize;
-let zipRemoveFileBtn;
-let zipCategoryOption;
-let zipError;
-let zipPreviewSection;
-let zipPreviewSummary;
-let zipSelectAllCheckbox;
-let zipPreviewList;
+function makeEl(tag, cls, text, children) {
+  const el = document.createElement(tag);
+  if (cls) el.className = cls;
+  if (text !== undefined) el.textContent = text;
+  if (children) children.forEach((c) => c && el.appendChild(c));
+  return el;
+}
 
-// Toast Element
-let toast;
-let toastMessage;
+function makeBtn(cls, text, aria, handler) {
+  const b = makeEl("button", cls, text);
+  b.type = "button";
+  if (aria) b.setAttribute("aria-label", aria);
+  if (handler) b.addEventListener("click", handler);
+  return b;
+}
 
-// ZIP System State
-let parsedZipSnippets = [];
+function setBtnState(btn, text, isTemp, orig) {
+  if (!btn) return;
+  btn.textContent = text;
+  if (isTemp) {
+    btn.classList.add("is-downloaded");
+    setTimeout(() => {
+      btn.textContent = orig;
+      btn.disabled = false;
+      btn.classList.remove("is-downloaded");
+    }, 2000);
+  }
+}
 
-// ==========================================
-// 4. INITIALIZATION
-// ==========================================
+function saveDemoSnippets() {
+  localStorage.setItem("quickcopy_demo_snippets", JSON.stringify(allSnippets));
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initDOMElements();
   setupEventListeners();
@@ -130,9 +72,6 @@ document.addEventListener("DOMContentLoaded", () => {
   loadSnippets();
 });
 
-/**
- * Cache references to all required DOM elements
- */
 function initDOMElements() {
   searchInput = document.getElementById("searchInput");
   clearSearchBtn = document.getElementById("clearSearchBtn");
@@ -181,207 +120,100 @@ function initDOMElements() {
   zipSelectAllCheckbox = document.getElementById("zipSelectAllCheckbox");
   zipPreviewList = document.getElementById("zipPreviewList");
 
+  zipModeFull = document.getElementById("zipModeFull");
+  zipModeExtract = document.getElementById("zipModeExtract");
+  zipFullDetailsSection = document.getElementById("zipFullDetailsSection");
+  zipFullTitle = document.getElementById("zipFullTitle");
+  zipFullSummary = document.getElementById("zipFullSummary");
+  zipFullFileList = document.getElementById("zipFullFileList");
+
   toast = document.getElementById("toast");
   toastMessage = document.getElementById("toastMessage");
 }
 
-/**
- * Check whether valid Supabase credentials were provided.
- * Falls back gracefully to Demo Mode if placeholder keys are detected.
- */
 function checkSupabaseConfiguration() {
-  const isPlaceholderUrl = 
-    !SUPABASE_URL ||
-    SUPABASE_URL === "YOUR_SUPABASE_URL" ||
-    !SUPABASE_URL.startsWith("http");
-
-  const isPlaceholderKey = 
-    !SUPABASE_ANON_KEY || 
-    SUPABASE_ANON_KEY === "YOUR_SUPABASE_ANON_KEY" ||
-    SUPABASE_ANON_KEY.length < 20;
-
-  if (isPlaceholderUrl || isPlaceholderKey) {
-    isDemoMode = true;
-    if (demoBanner) {
-      demoBanner.classList.remove("hidden");
-    }
-    console.info(
-      "%c[QuickCopy]%c Running in local demo fallback mode. Configure SUPABASE_URL and SUPABASE_ANON_KEY in script.js to connect to Supabase.",
-      "color: #2563eb; font-weight: bold;",
-      "color: inherit;"
-    );
-  } else {
-    isDemoMode = false;
-    if (demoBanner) {
-      demoBanner.classList.add("hidden");
-    }
+  const isBad = !SUPABASE_URL || SUPABASE_URL.includes("YOUR_") || !SUPABASE_URL.startsWith("http") || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.length < 20;
+  isDemoMode = isBad;
+  if (!isBad && window.supabase && typeof window.supabase.createClient === "function") {
     try {
-      if (window.supabase && typeof window.supabase.createClient === "function") {
-        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      } else {
-        console.warn("[QuickCopy] Supabase JS SDK not loaded from CDN. Falling back to demo mode.");
-        isDemoMode = true;
-      }
-    } catch (err) {
-      console.error("[QuickCopy] Error initializing Supabase client:", err);
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } catch {
       isDemoMode = true;
     }
+  } else {
+    isDemoMode = true;
   }
+  if (demoBanner) demoBanner.classList.toggle("hidden", !isDemoMode);
 }
 
-/**
- * Register all event listeners
- */
 function setupEventListeners() {
-  // Search and filter listeners
-  searchInput.addEventListener("input", () => {
-    if (searchInput.value.trim().length > 0) {
-      clearSearchBtn.classList.remove("hidden");
-    } else {
-      clearSearchBtn.classList.add("hidden");
-    }
+  const on = (el, ev, fn) => el && el.addEventListener(ev, fn);
+
+  on(searchInput, "input", () => {
+    clearSearchBtn.classList.toggle("hidden", searchInput.value.trim().length === 0);
     filterSnippets();
   });
 
-  clearSearchBtn.addEventListener("click", () => {
+  on(clearSearchBtn, "click", () => {
     searchInput.value = "";
     clearSearchBtn.classList.add("hidden");
     searchInput.focus();
     filterSnippets();
   });
 
-  categoryFilter.addEventListener("change", () => {
-    filterSnippets();
+  on(categoryFilter, "change", filterSnippets);
+  on(copyAllBtn, "click", copyAllSnippets);
+
+  on(downloadZipBtn, "click", () => {
+    const list = (currentFilteredSnippets && currentFilteredSnippets.length > 0) ? currentFilteredSnippets : allSnippets;
+    exportSnippetsToZip(list, undefined, downloadZipBtn);
   });
 
-  // Copy All button
-  copyAllBtn.addEventListener("click", () => {
-    copyAllSnippets();
-  });
+  on(uploadZipBtn, "click", openZipModal);
+  [openCreateBtn, emptyCreateBtn].forEach((b) => on(b, "click", openModal));
+  [closeModalBtn, cancelModalBtn].forEach((b) => on(b, "click", closeModal));
+  [closeZipModalBtn, cancelZipModalBtn].forEach((b) => on(b, "click", closeZipModal));
 
-  // ZIP Toolbar listeners
-  if (downloadZipBtn) {
-    downloadZipBtn.addEventListener("click", () => {
-      const listToExport = (currentFilteredSnippets && currentFilteredSnippets.length > 0)
-        ? currentFilteredSnippets
-        : allSnippets;
-      exportSnippetsToZip(listToExport, undefined, downloadZipBtn);
-    });
-  }
+  on(createModal, "click", (e) => { if (e.target === createModal) closeModal(); });
+  on(uploadZipModal, "click", (e) => { if (e.target === uploadZipModal) closeZipModal(); });
 
-  if (uploadZipBtn) {
-    uploadZipBtn.addEventListener("click", () => openZipModal());
-  }
-
-  // Create Modal open / close listeners
-  openCreateBtn.addEventListener("click", () => openModal());
-  emptyCreateBtn.addEventListener("click", () => openModal());
-  closeModalBtn.addEventListener("click", () => closeModal());
-  cancelModalBtn.addEventListener("click", () => closeModal());
-
-  // Close create modal when clicking outside of dialog
-  createModal.addEventListener("click", (event) => {
-    if (event.target === createModal) {
-      closeModal();
-    }
-  });
-
-  // Upload ZIP Modal open / close listeners
-  if (closeZipModalBtn) {
-    closeZipModalBtn.addEventListener("click", () => closeZipModal());
-  }
-  if (cancelZipModalBtn) {
-    cancelZipModalBtn.addEventListener("click", () => closeZipModal());
-  }
-  if (uploadZipModal) {
-    uploadZipModal.addEventListener("click", (event) => {
-      if (event.target === uploadZipModal) {
-        closeZipModal();
-      }
-    });
-  }
-
-  // Dropzone drag-and-drop & file selection listeners
   if (zipDropzone) {
-    zipDropzone.addEventListener("click", () => {
-      if (zipFileInput) zipFileInput.click();
+    const stopEv = (e) => { e.preventDefault(); e.stopPropagation(); };
+    on(zipDropzone, "click", () => { if (zipFileInput) zipFileInput.click(); });
+    on(zipDropzone, "keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (zipFileInput) zipFileInput.click(); }
     });
-
-    zipDropzone.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        if (zipFileInput) zipFileInput.click();
-      }
-    });
-
-    ["dragenter", "dragover"].forEach((eventName) => {
-      zipDropzone.addEventListener(eventName, (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        zipDropzone.classList.add("drag-over");
-      });
-    });
-
-    ["dragleave", "dragend"].forEach((eventName) => {
-      zipDropzone.addEventListener(eventName, (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        zipDropzone.classList.remove("drag-over");
-      });
-    });
-
-    zipDropzone.addEventListener("drop", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
+    ["dragenter", "dragover"].forEach((ev) => on(zipDropzone, ev, (e) => { stopEv(e); zipDropzone.classList.add("drag-over"); }));
+    ["dragleave", "dragend"].forEach((ev) => on(zipDropzone, ev, (e) => { stopEv(e); zipDropzone.classList.remove("drag-over"); }));
+    on(zipDropzone, "drop", (e) => {
+      stopEv(e);
       zipDropzone.classList.remove("drag-over");
-      const files = event.dataTransfer ? event.dataTransfer.files : null;
-      if (files && files.length > 0) {
-        handleSelectedZipFile(files[0]);
-      }
+      const files = e.dataTransfer ? e.dataTransfer.files : null;
+      if (files && files.length > 0) handleSelectedZipFile(files[0]);
     });
   }
 
-  if (zipFileInput) {
-    zipFileInput.addEventListener("change", () => {
-      if (zipFileInput.files && zipFileInput.files.length > 0) {
-        handleSelectedZipFile(zipFileInput.files[0]);
-      }
-    });
-  }
+  on(zipFileInput, "change", () => {
+    if (zipFileInput.files && zipFileInput.files.length > 0) handleSelectedZipFile(zipFileInput.files[0]);
+  });
 
-  if (zipRemoveFileBtn) {
-    zipRemoveFileBtn.addEventListener("click", () => {
-      resetZipModalState();
-    });
-  }
+  on(zipRemoveFileBtn, "click", resetZipModalState);
+  on(zipCategoryOption, "change", applyZipCategoryOptionChange);
+  on(zipSelectAllCheckbox, "change", () => toggleSelectAllZipSnippets(zipSelectAllCheckbox.checked));
+  on(zipModeFull, "change", updateZipModalModeUI);
+  on(zipModeExtract, "change", updateZipModalModeUI);
 
-  if (zipCategoryOption) {
-    zipCategoryOption.addEventListener("change", () => {
-      applyZipCategoryOptionChange();
-    });
-  }
+  on(confirmZipImportBtn, "click", () => {
+    if (getZipUploadMode() === "full") saveFullZipSnippet();
+    else importSelectedZipSnippets();
+  });
 
-  if (zipSelectAllCheckbox) {
-    zipSelectAllCheckbox.addEventListener("change", () => {
-      toggleSelectAllZipSnippets(zipSelectAllCheckbox.checked);
-    });
-  }
-
-  if (confirmZipImportBtn) {
-    confirmZipImportBtn.addEventListener("click", () => {
-      importSelectedZipSnippets();
-    });
-  }
-
-  // Handle modal keyboard accessibility (Escape to close, Tab focus trapping)
   document.addEventListener("keydown", (event) => {
     const isCreateOpen = createModal && !createModal.classList.contains("hidden");
     const isZipOpen = uploadZipModal && !uploadZipModal.classList.contains("hidden");
-
     if (!isCreateOpen && !isZipOpen) return;
 
     const activeModal = isCreateOpen ? createModal : uploadZipModal;
-
     if (event.key === "Escape") {
       if (isCreateOpen) closeModal();
       if (isZipOpen) closeZipModal();
@@ -396,224 +228,132 @@ function setupEventListeners() {
       ).filter((el) => el.offsetParent !== null && window.getComputedStyle(el).visibility !== "hidden");
       if (focusable.length === 0) return;
 
-      const firstEl = focusable[0];
-      const lastEl = focusable[focusable.length - 1];
-
-      if (event.shiftKey) {
-        if (document.activeElement === firstEl) {
-          event.preventDefault();
-          lastEl.focus();
-        }
-      } else {
-        if (document.activeElement === lastEl) {
-          event.preventDefault();
-          firstEl.focus();
-        }
+      const firstEl = focusable[0], lastEl = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === firstEl) {
+        event.preventDefault(); lastEl.focus();
+      } else if (!event.shiftKey && document.activeElement === lastEl) {
+        event.preventDefault(); firstEl.focus();
       }
     }
   });
 
-  // Form input character counters & validation styling
-  snippetTitle.addEventListener("input", () => {
-    const len = snippetTitle.value.length;
-    titleCharCount.textContent = `${len} / 100`;
-    if (len >= 100) {
-      titleCharCount.classList.add("is-limit");
-    } else {
-      titleCharCount.classList.remove("is-limit");
-    }
-    hideFormError();
-  });
+  const bindCount = (input, counter, max) => {
+    on(input, "input", () => {
+      const len = input.value.length;
+      counter.textContent = `${len} / ${max}`;
+      counter.classList.toggle("is-limit", len >= max);
+      hideFormError();
+    });
+  };
+  bindCount(snippetTitle, titleCharCount, 100);
+  bindCount(snippetContent, contentCharCount, 10000);
 
-  snippetContent.addEventListener("input", () => {
-    const len = snippetContent.value.length;
-    contentCharCount.textContent = `${len} / 10000`;
-    if (len >= 10000) {
-      contentCharCount.classList.add("is-limit");
-    } else {
-      contentCharCount.classList.remove("is-limit");
-    }
-    hideFormError();
-  });
-
-  // Form submission
-  createSnippetForm.addEventListener("submit", (event) => {
-    event.preventDefault();
+  on(createSnippetForm, "submit", (e) => {
+    e.preventDefault();
     createSnippet();
   });
 
-  // Retry button
-  retryBtn.addEventListener("click", () => {
-    loadSnippets();
+  on(retryBtn, "click", loadSnippets);
+  on(dismissBannerBtn, "click", () => {
+    if (demoBanner) demoBanner.classList.add("hidden");
   });
-
-  // Demo banner dismiss
-  if (dismissBannerBtn) {
-    dismissBannerBtn.addEventListener("click", () => {
-      if (demoBanner) demoBanner.classList.add("hidden");
-    });
-  }
 }
 
-// ==========================================
-// 5. CORE FUNCTIONS
-// ==========================================
-
-/**
- * Load snippets from Supabase or localStorage demo database.
- * Orders snippets by created_at DESC (newest first).
- */
 async function loadSnippets() {
-  // Show loading state, hide other views
-  loadingState.classList.remove("hidden");
+  snippetsGrid.innerHTML = "";
   emptyState.classList.add("hidden");
   errorState.classList.add("hidden");
-  snippetsGrid.innerHTML = "";
+  loadingState.classList.remove("hidden");
 
   if (isDemoMode) {
-    // Simulate brief network fetch in demo mode for realistic UI transition
     setTimeout(() => {
       try {
         const stored = localStorage.getItem("quickcopy_demo_snippets");
-        if (stored) {
-          allSnippets = JSON.parse(stored);
-        } else {
-          allSnippets = [...INITIAL_DEMO_SNIPPETS];
-          localStorage.setItem("quickcopy_demo_snippets", JSON.stringify(allSnippets));
-        }
-
-        // Sort descending by created_at
+        allSnippets = stored ? JSON.parse(stored) : [...INITIAL_DEMO_SNIPPETS];
+        if (!stored) saveDemoSnippets();
         allSnippets.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
         loadingState.classList.add("hidden");
         filterSnippets();
-      } catch (err) {
-        console.error("[QuickCopy Demo] Error loading local snippets:", err);
+      } catch {
+        loadingState.classList.add("hidden");
         showErrorState("Unable to load snippets.\n\nPlease refresh the page and try again.");
       }
-    }, 200);
+    }, 150);
     return;
   }
 
-  // Live Supabase query
   try {
     const { data, error } = await supabaseClient
       .from("snippets")
       .select("id, title, category, content, created_at")
       .order("created_at", { ascending: false });
 
+    loadingState.classList.add("hidden");
     if (error) {
-      console.error("[QuickCopy Supabase Query Error]", error);
+      console.error("[QuickCopy Supabase Error]", error);
       showErrorState("Unable to load snippets.\n\nPlease refresh the page and try again.");
       return;
     }
-
     allSnippets = data || [];
-    loadingState.classList.add("hidden");
     filterSnippets();
   } catch (err) {
     console.error("[QuickCopy Network Error]", err);
+    loadingState.classList.add("hidden");
     showErrorState("Unable to load snippets.\n\nPlease refresh the page and try again.");
   }
 }
 
-/**
- * Filter snippets in real-time by search query (title, content, category)
- * and selected category filter.
- */
 function filterSnippets() {
-  const query = (searchInput.value || "").trim().toLowerCase();
-  const selectedCategory = categoryFilter.value;
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+  const category = categoryFilter ? categoryFilter.value : "All";
 
   currentFilteredSnippets = allSnippets.filter((snippet) => {
-    // Category check
-    const matchesCategory = 
-      selectedCategory === "All" || 
-      (snippet.category && snippet.category.toLowerCase() === selectedCategory.toLowerCase());
-
-    // Search query check
+    const matchesCategory = category === "All" || (snippet.category && snippet.category.toLowerCase() === category.toLowerCase());
     const titleText = (snippet.title || "").toLowerCase();
     const contentText = (snippet.content || "").toLowerCase();
     const catText = (snippet.category || "").toLowerCase();
-
-    const matchesSearch = 
-      !query || 
-      titleText.includes(query) || 
-      contentText.includes(query) || 
-      catText.includes(query);
-
-    return matchesCategory && matchesSearch;
+    return matchesCategory && (!query || titleText.includes(query) || contentText.includes(query) || catText.includes(query));
   });
 
-  updateResultsMeta(query, selectedCategory, currentFilteredSnippets.length, allSnippets.length);
+  updateResultsMeta(query, category, currentFilteredSnippets.length, allSnippets.length);
   renderSnippets(currentFilteredSnippets);
 }
 
-/**
- * Update the metadata indicator below the toolbar
- */
 function updateResultsMeta(query, category, count, total) {
+  if (!resultsCount) return;
   if (total === 0) {
     resultsCount.textContent = "0 snippets";
     activeFilterTag.classList.add("hidden");
     return;
   }
+  const sLabel = count === 1 ? "snippet" : "snippets";
+  resultsCount.textContent = `Showing ${count} of ${total} ${sLabel}`;
 
-  resultsCount.textContent = `Showing ${count} of ${total} snippet${total === 1 ? "" : "s"}`;
+  const tags = [];
+  if (category && category !== "All") tags.push(`Category: ${category}`);
+  if (query) tags.push(`Search: "${query}"`);
 
-  if (category !== "All" || query) {
-    const filtersApplied = [];
-    if (category !== "All") filtersApplied.push(`Category: ${category}`);
-    if (query) filtersApplied.push(`"${query}"`);
-    activeFilterTag.textContent = filtersApplied.join(" • ");
+  if (tags.length > 0) {
+    activeFilterTag.textContent = tags.join(" • ");
     activeFilterTag.classList.remove("hidden");
   } else {
     activeFilterTag.classList.add("hidden");
   }
 }
 
-/**
- * Safely render snippets to the DOM.
- * STRICT XSS PREVENTION: Uses document.createElement and textContent exclusively.
- * NEVER inserts untrusted user content into innerHTML.
- */
 function renderSnippets(snippetsToDisplay = currentFilteredSnippets) {
-  // Clear existing items in grid
   snippetsGrid.innerHTML = "";
-
-  // 1. Overall empty state (no snippets exist in database)
   if (allSnippets.length === 0) {
     emptyState.classList.remove("hidden");
     snippetsGrid.classList.add("hidden");
     return;
   }
-
   emptyState.classList.add("hidden");
   snippetsGrid.classList.remove("hidden");
 
-  // 2. Filter/Search returned no matches
   if (snippetsToDisplay.length === 0) {
-    const noMatchBox = document.createElement("div");
-    noMatchBox.className = "state-box";
-    noMatchBox.style.gridColumn = "1 / -1";
-    noMatchBox.style.padding = "3rem 1.5rem";
-
-    const noMatchIcon = document.createElement("div");
-    noMatchIcon.className = "state-icon";
-    noMatchIcon.textContent = "🔍";
-
-    const noMatchTitle = document.createElement("h3");
-    noMatchTitle.className = "state-title";
-    noMatchTitle.textContent = "No matching snippets";
-
-    const noMatchDesc = document.createElement("p");
-    noMatchDesc.className = "state-desc";
-    noMatchDesc.textContent = "Try adjusting your search terms or category filter.";
-
-    const clearBtn = document.createElement("button");
-    clearBtn.className = "btn btn-secondary";
+    const clearBtn = makeEl("button", "btn btn-secondary", "Reset Filters");
     clearBtn.type = "button";
-    clearBtn.textContent = "Reset Filters";
     clearBtn.addEventListener("click", () => {
       searchInput.value = "";
       clearSearchBtn.classList.add("hidden");
@@ -621,153 +361,224 @@ function renderSnippets(snippetsToDisplay = currentFilteredSnippets) {
       filterSnippets();
     });
 
-    noMatchBox.appendChild(noMatchIcon);
-    noMatchBox.appendChild(noMatchTitle);
-    noMatchBox.appendChild(noMatchDesc);
-    noMatchBox.appendChild(clearBtn);
-
+    const noMatchBox = makeEl("div", "state-box", undefined, [
+      makeEl("div", "state-icon", "🔍"),
+      makeEl("h3", "state-title", "No matching snippets"),
+      makeEl("p", "state-desc", "Try adjusting your search terms or category filter."),
+      clearBtn
+    ]);
+    noMatchBox.style.gridColumn = "1 / -1";
+    noMatchBox.style.padding = "3rem 1.5rem";
     snippetsGrid.appendChild(noMatchBox);
     return;
   }
 
-  // 3. Render snippet cards safely
   snippetsToDisplay.forEach((snippet) => {
-    const card = createSnippetCardElement(snippet);
-    snippetsGrid.appendChild(card);
+    snippetsGrid.appendChild(createSnippetCardElement(snippet));
   });
 }
 
-/**
- * Build a single snippet card DOM element safely with createElement
- */
+function openZipDB() {
+  return new Promise((res) => {
+    if (typeof indexedDB === "undefined") return res(null);
+    try {
+      const r = indexedDB.open("quickcopy_zip_db", 1);
+      r.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains("zip_files")) db.createObjectStore("zip_files");
+      };
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => res(null);
+    } catch { res(null); }
+  });
+}
+
+async function saveZipBlobToDB(id, blob) {
+  if (!id || !blob) return false;
+  try {
+    const db = await openZipDB();
+    if (!db) return false;
+    return new Promise((res) => {
+      const tx = db.transaction("zip_files", "readwrite");
+      tx.objectStore("zip_files").put(blob, String(id));
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => res(false);
+    });
+  } catch { return false; }
+}
+
+async function getZipBlobFromDB(id) {
+  if (!id) return null;
+  try {
+    const db = await openZipDB();
+    if (!db) return null;
+    return new Promise((res) => {
+      const req = db.transaction("zip_files", "readonly").objectStore("zip_files").get(String(id));
+      req.onsuccess = () => res(req.result || null);
+      req.onerror = () => res(null);
+    });
+  } catch { return null; }
+}
+
+function readFileAsBase64(blobOrFile) {
+  return new Promise((res) => {
+    if (typeof FileReader === "undefined") return res("");
+    const r = new FileReader();
+    r.onload = () => {
+      const s = r.result;
+      if (typeof s === "string") {
+        const i = s.indexOf(",");
+        res(i >= 0 ? s.slice(i + 1) : s);
+      } else res("");
+    };
+    r.onerror = () => res("");
+    r.readAsDataURL(blobOrFile);
+  });
+}
+
+function base64ToBlob(b64, mime = "application/zip") {
+  const c = atob(b64), b = new Uint8Array(c.length);
+  for (let i = 0; i < c.length; i++) b[i] = c.charCodeAt(i);
+  return new Blob([b], { type: mime });
+}
+
+function isFullZipSnippet(snippet) {
+  if (!snippet || !snippet.content) return false;
+  const c = snippet.content.trim();
+  return (
+    c.startsWith('{"__quickcopy_zip__":true') ||
+    c.startsWith('{"__quickcopy_zip__": true') ||
+    (snippet.category === "ZIP Archive" && c.includes('"__quickcopy_zip__"'))
+  );
+}
+
+function parseZipDescriptor(snippet) {
+  if (!snippet || !snippet.content) return null;
+  try {
+    const obj = JSON.parse(snippet.content);
+    if (obj && obj.__quickcopy_zip__) return obj;
+  } catch {}
+  return null;
+}
+
+function createFullZipCardElement(snippet) {
+  const descriptor = parseZipDescriptor(snippet) || {};
+  const fileCount = descriptor.fileCount || (descriptor.files ? descriptor.files.length : 0);
+  const fileSize = descriptor.fileSize || 0;
+  const files = descriptor.files || [];
+
+  const timeSpan = makeEl("time", "snippet-time", formatTimestamp(snippet.created_at));
+  if (snippet.created_at) timeSpan.setAttribute("datetime", snippet.created_at);
+
+  const header = makeEl("div", "snippet-card-header", undefined, [
+    makeEl("div", "snippet-title-row", undefined, [makeEl("h2", "snippet-title", snippet.title || descriptor.fileName || "archive.zip")]),
+    makeEl("div", "snippet-meta-row", undefined, [
+      makeEl("span", "category-badge badge-ziparchive", snippet.category || "ZIP Archive"),
+      timeSpan
+    ])
+  ]);
+
+  const fileList = makeEl("div", "zip-card-filelist");
+  if (files.length === 0) {
+    fileList.appendChild(makeEl("div", "zip-card-file-item", undefined, [makeEl("span", "zip-card-file-name", descriptor.fileName || "Archive contents intact")]));
+  } else {
+    files.forEach((f) => {
+      fileList.appendChild(makeEl("div", "zip-card-file-item", undefined, [
+        makeEl("span", "zip-card-file-name", f.name),
+        makeEl("span", "zip-card-file-size", formatBytes(f.size))
+      ]));
+    });
+  }
+
+  const body = makeEl("div", "snippet-card-body", undefined, [
+    makeEl("div", "zip-card-overview", `📦 ZIP Archive • ${fileCount} file${fileCount === 1 ? "" : "s"} • ${formatBytes(fileSize)}`),
+    fileList
+  ]);
+
+  const copyInfoBtn = makeBtn("btn-copy", "📋 Copy Info", `Copy archive details for "${snippet.title}"`, () => {
+    copySnippet([
+      `Title: ${snippet.title}`,
+      `Category: ${snippet.category || "ZIP Archive"}`,
+      `Files: ${fileCount} | Size: ${formatBytes(fileSize)}`,
+      "Files inside archive:",
+      ...files.map((f) => `- ${f.name} (${formatBytes(f.size)})`)
+    ].join("\n"), copyInfoBtn);
+  });
+
+  const extractBtn = makeBtn("btn-copy btn-card-extract", "📂 Extract & Split", `Extract all files from ZIP "${snippet.title}" into individual snippet cards`, () => extractAndSplitZipSnippet(snippet, extractBtn));
+
+  const downloadBtn = makeBtn("btn-copy btn-card-zip-primary", "📥 Download ZIP", `Download intact ZIP file "${snippet.title}"`, () => downloadFullZipSnippet(snippet, downloadBtn));
+
+  const footer = makeEl("div", "snippet-card-footer", undefined, [copyInfoBtn, extractBtn, downloadBtn]);
+  const card = makeEl("article", "snippet-card snippet-card-zip", undefined, [header, body, footer]);
+  card.setAttribute("data-id", snippet.id || "");
+  return card;
+}
+
 function createSnippetCardElement(snippet) {
-  const card = document.createElement("article");
-  card.className = "snippet-card";
+  if (isFullZipSnippet(snippet)) {
+    return createFullZipCardElement(snippet);
+  }
+
+  const card = makeEl("article", "snippet-card");
   card.setAttribute("data-id", snippet.id || "");
 
-  // Header
-  const header = document.createElement("div");
-  header.className = "snippet-card-header";
-
-  const titleRow = document.createElement("div");
-  titleRow.className = "snippet-title-row";
-
-  const title = document.createElement("h2");
-  title.className = "snippet-title";
+  const titleRow = makeEl("div", "snippet-title-row");
+  const title = makeEl("h2", "snippet-title");
   title.textContent = snippet.title || "Untitled Snippet";
   titleRow.appendChild(title);
 
-  const metaRow = document.createElement("div");
-  metaRow.className = "snippet-meta-row";
-
-  // Category Badge
-  const categoryBadge = document.createElement("span");
   const cat = snippet.category || "General";
   const catSlug = cat.toLowerCase().replace(/[^a-z0-9]/g, "");
-  categoryBadge.className = `category-badge badge-${catSlug}`;
+  const categoryBadge = makeEl("span", `category-badge badge-${catSlug}`);
   categoryBadge.textContent = cat;
-  metaRow.appendChild(categoryBadge);
 
-  // Formatted Time
-  const timeSpan = document.createElement("time");
-  timeSpan.className = "snippet-time";
-  timeSpan.textContent = formatTimestamp(snippet.created_at);
-  if (snippet.created_at) {
-    timeSpan.setAttribute("datetime", snippet.created_at);
-  }
-  metaRow.appendChild(timeSpan);
+  const timeSpan = makeEl("time", "snippet-time", formatTimestamp(snippet.created_at));
+  if (snippet.created_at) timeSpan.setAttribute("datetime", snippet.created_at);
 
-  header.appendChild(titleRow);
-  header.appendChild(metaRow);
+  const metaRow = makeEl("div", "snippet-meta-row", undefined, [categoryBadge, timeSpan]);
+  const header = makeEl("div", "snippet-card-header", undefined, [titleRow, metaRow]);
 
-  // Body / Content
-  const body = document.createElement("div");
-  body.className = "snippet-card-body";
-
-  const contentWrapper = document.createElement("div");
-  contentWrapper.className = "snippet-content-wrapper";
-
-  const pre = document.createElement("pre");
-  pre.className = "snippet-content";
+  const pre = makeEl("pre", "snippet-content");
   pre.textContent = snippet.content || "";
-  contentWrapper.appendChild(pre);
+  const contentWrapper = makeEl("div", "snippet-content-wrapper", undefined, [pre]);
+  const body = makeEl("div", "snippet-card-body", undefined, [contentWrapper]);
 
-  body.appendChild(contentWrapper);
-
-  // Truncation Check: > 6 lines or > 300 characters
   const rawContent = snippet.content || "";
   const lineCount = (rawContent.match(/\n/g) || []).length + 1;
   const isLong = lineCount > 6 || rawContent.length > 300;
 
   if (isLong) {
     contentWrapper.classList.add("is-truncated");
-
-    const expandBtn = document.createElement("button");
-    expandBtn.className = "snippet-expand-btn";
+    const expandBtn = makeEl("button", "snippet-expand-btn", "Show more ▼");
     expandBtn.type = "button";
-    expandBtn.textContent = "Show more ▼";
     expandBtn.setAttribute("aria-expanded", "false");
-
     expandBtn.addEventListener("click", () => {
-      const isCurrentlyTruncated = contentWrapper.classList.contains("is-truncated");
-      if (isCurrentlyTruncated) {
-        contentWrapper.classList.remove("is-truncated");
-        expandBtn.textContent = "Show less ▲";
-        expandBtn.setAttribute("aria-expanded", "true");
-      } else {
-        contentWrapper.classList.add("is-truncated");
-        expandBtn.textContent = "Show more ▼";
-        expandBtn.setAttribute("aria-expanded", "false");
-      }
+      const isTruncated = contentWrapper.classList.toggle("is-truncated");
+      expandBtn.textContent = isTruncated ? "Show more ▼" : "Show less ▲";
+      expandBtn.setAttribute("aria-expanded", isTruncated ? "false" : "true");
     });
-
     body.appendChild(expandBtn);
   }
 
-  // Footer / Action Buttons (ZIP & Copy)
-  const footer = document.createElement("div");
-  footer.className = "snippet-card-footer";
-
-  const zipBtn = document.createElement("button");
-  zipBtn.className = "btn-copy btn-card-zip";
-  zipBtn.type = "button";
-  zipBtn.textContent = "📦 ZIP";
-  zipBtn.setAttribute("aria-label", `Download snippet "${snippet.title}" as ZIP`);
-
-  zipBtn.addEventListener("click", () => {
+  const zipBtn = makeBtn("btn-copy btn-card-zip", "📦 ZIP", `Download snippet "${snippet.title}" as ZIP`, () => {
     downloadSingleSnippetZip(snippet, zipBtn);
   });
 
-  const copyBtn = document.createElement("button");
-  copyBtn.className = "btn-copy";
-  copyBtn.type = "button";
-  copyBtn.textContent = "📋 COPY";
-  copyBtn.setAttribute("aria-label", `Copy snippet "${snippet.title}"`);
-
-  copyBtn.addEventListener("click", () => {
+  const copyBtn = makeBtn("btn-copy", "📋 COPY", `Copy snippet "${snippet.title}"`, () => {
     copySnippet(snippet.content || "", copyBtn);
   });
 
-  footer.appendChild(zipBtn);
-  footer.appendChild(copyBtn);
-
-  // Assemble card
+  const footer = makeEl("div", "snippet-card-footer", undefined, [zipBtn, copyBtn]);
   card.appendChild(header);
   card.appendChild(body);
   card.appendChild(footer);
-
   return card;
 }
 
-/**
- * Create a new snippet and save to Supabase or Demo localStorage
- */
 async function createSnippet() {
+  hideFormError();
   const title = (snippetTitle.value || "").trim();
-  const category = snippetCategory.value || "General";
-  const rawContent = snippetContent.value || "";
-
-  // Validate title: 1-100 characters
   if (!title) {
     displayFormError("Title is required.");
     snippetTitle.focus();
@@ -779,7 +590,7 @@ async function createSnippet() {
     return;
   }
 
-  // Validate content: 1-10,000 characters (check non-empty after trim, but preserve code indentation)
+  const rawContent = snippetContent.value || "";
   if (!rawContent.trim()) {
     displayFormError("Content is required.");
     snippetContent.focus();
@@ -790,37 +601,28 @@ async function createSnippet() {
     snippetContent.focus();
     return;
   }
-
-  // Preserve initial line indentation for code/commands while trimming trailing whitespace
   const content = rawContent.trimEnd();
+  const category = snippetCategory.value || "General";
 
-  // Indicate loading state on button
   setSavingState(true);
-  hideFormError();
-
-  const newSnippetRecord = {
-    title,
-    category,
-    content,
-    created_at: new Date().toISOString()
-  };
 
   if (isDemoMode) {
-    // Local demo storage
     setTimeout(() => {
       try {
-        const demoId = "demo-" + Date.now();
-        const createdItem = { id: demoId, ...newSnippetRecord };
-
-        allSnippets.unshift(createdItem);
-        localStorage.setItem("quickcopy_demo_snippets", JSON.stringify(allSnippets));
-
+        const newSnippet = {
+          id: `demo-${Date.now()}`,
+          title,
+          category,
+          content,
+          created_at: new Date().toISOString()
+        };
+        allSnippets.unshift(newSnippet);
+        saveDemoSnippets();
         setSavingState(false);
         closeModal();
         filterSnippets();
-        showToast("Snippet created successfully!");
-      } catch (err) {
-        console.error("[QuickCopy Demo] Save error:", err);
+        showToast("Snippet saved!");
+      } catch {
         setSavingState(false);
         displayFormError("Could not save your snippet.\nPlease try again.");
       }
@@ -828,159 +630,120 @@ async function createSnippet() {
     return;
   }
 
-  // Supabase insertion
   try {
     const { data, error } = await supabaseClient
       .from("snippets")
-      .insert([
-        {
-          title: newSnippetRecord.title,
-          category: newSnippetRecord.category,
-          content: newSnippetRecord.content
-        }
-      ])
+      .insert([{ title, category, content }])
       .select();
 
     if (error) {
-      console.error("[QuickCopy Supabase Save Error]", error);
+      console.error("[QuickCopy Supabase Insert Error]", error);
       setSavingState(false);
       displayFormError("Could not save your snippet.\nPlease try again.");
       return;
     }
 
-    // Add created item to local state
-    if (data && data.length > 0) {
-      allSnippets.unshift(data[0]);
-    } else {
-      allSnippets.unshift(newSnippetRecord);
-    }
-
+    const insertedSnippet = (data && data[0]) || {
+      id: `supa-${Date.now()}`,
+      title,
+      category,
+      content,
+      created_at: new Date().toISOString()
+    };
+    allSnippets.unshift(insertedSnippet);
     setSavingState(false);
     closeModal();
     filterSnippets();
-    showToast("Snippet created successfully!");
+    showToast("Snippet saved!");
   } catch (err) {
-    console.error("[QuickCopy Save Network Error]", err);
+    console.error("[QuickCopy Insert Network Error]", err);
     setSavingState(false);
     displayFormError("Could not save your snippet.\nPlease try again.");
   }
 }
 
-/**
- * Copy a snippet's text to the clipboard.
- * Features modern navigator.clipboard with fallback to document.execCommand('copy').
- * Updates button to "✓ COPIED" for 2 seconds.
- */
-function copySnippet(text, buttonElement, customToast = "Copied to clipboard!", onSuccessCallback) {
-  if (!text) {
-    showToast("Nothing to copy.");
-    return;
-  }
+function copySnippet(text, buttonElement, customToast = "Copied to clipboard!") {
+  if (!buttonElement) return;
 
-  const handleSuccess = () => {
-    if (buttonElement) {
-      const originalText = buttonElement.textContent;
-      buttonElement.textContent = "✓ COPIED";
-      buttonElement.classList.add("is-copied");
-
-      setTimeout(() => {
-        buttonElement.textContent = originalText;
-        buttonElement.classList.remove("is-copied");
-      }, 2000);
-    }
-    if (typeof onSuccessCallback === "function") {
-      onSuccessCallback();
-    }
+  const doSuccessFeedback = () => {
+    const originalText = buttonElement.textContent;
+    buttonElement.textContent = "✓ COPIED";
+    buttonElement.classList.add("is-copied");
+    setTimeout(() => {
+      buttonElement.textContent = originalText;
+      buttonElement.classList.remove("is-copied");
+    }, 2000);
     showToast(customToast);
   };
 
-  const handleFailure = (err) => {
-    console.error("[QuickCopy] Copy failed:", err);
-    showToast("Unable to copy to clipboard.");
+  const doFailureFeedback = () => {
+    showToast("Could not copy snippet to clipboard.");
   };
 
-  // Attempt Modern Clipboard API
   if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-    navigator.clipboard.writeText(text).then(handleSuccess).catch(() => {
-      // Fallback if permission rejected or unsupported in context
-      fallbackExecCommandCopy(text, handleSuccess, handleFailure);
-    });
+    navigator.clipboard.writeText(text)
+      .then(doSuccessFeedback)
+      .catch(() => fallbackExecCommandCopy(text, doSuccessFeedback, doFailureFeedback));
   } else {
-    // Fallback for older browsers or insecure contexts
-    fallbackExecCommandCopy(text, handleSuccess, handleFailure);
+    fallbackExecCommandCopy(text, doSuccessFeedback, doFailureFeedback);
   }
 }
 
-/**
- * Fallback copy implementation using an invisible textarea
- */
 function fallbackExecCommandCopy(text, onSuccess, onFailure) {
-  try {
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    textArea.style.position = "fixed";
-    textArea.style.left = "-999999px";
-    textArea.style.top = "-999999px";
-    textArea.setAttribute("readonly", "");
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-    if (typeof textArea.setSelectionRange === "function") {
-      textArea.setSelectionRange(0, textArea.value.length);
-    }
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.style.position = "fixed";
+  textArea.style.top = "-9999px";
+  textArea.style.left = "-9999px";
+  textArea.style.opacity = "0";
+  textArea.setAttribute("readonly", "");
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+  textArea.setSelectionRange(0, textArea.value.length);
 
+  try {
     const successful = document.execCommand("copy");
     document.body.removeChild(textArea);
-
     if (successful) {
-      onSuccess();
+      if (typeof onSuccess === "function") onSuccess();
     } else {
-      onFailure(new Error("execCommand copy returned false"));
+      if (typeof onFailure === "function") onFailure();
     }
-  } catch (err) {
-    onFailure(err);
+  } catch {
+    document.body.removeChild(textArea);
+    if (typeof onFailure === "function") onFailure();
   }
 }
 
-/**
- * Copy all currently visible snippets formatted as:
- * Title 1\n\nContent 1\n\n\nTitle 2\n\nContent 2
- */
 function copyAllSnippets() {
-  if (!currentFilteredSnippets || currentFilteredSnippets.length === 0) {
+  const snippetsToCopy = (currentFilteredSnippets && currentFilteredSnippets.length > 0)
+    ? currentFilteredSnippets
+    : allSnippets;
+
+  if (!snippetsToCopy || snippetsToCopy.length === 0) {
     showToast("No snippets to copy.");
     return;
   }
 
-  // Format visibly filtered snippets
-  const formattedContent = currentFilteredSnippets
+  const formattedAll = snippetsToCopy
     .map((s) => `${s.title || "Untitled"}\n\n${s.content || ""}`)
     .join("\n\n\n");
 
   const originalHtml = copyAllBtn.innerHTML;
+  copySnippet(formattedAll, copyAllBtn, `Copied ${snippetsToCopy.length} snippet${snippetsToCopy.length === 1 ? "" : "s"}!`);
 
-  copySnippet(
-    formattedContent, 
-    null, 
-    `Copied all (${currentFilteredSnippets.length}) snippets to clipboard!`,
-    () => {
-      // Provide temporary feedback on the Copy All button only on success
-      copyAllBtn.innerHTML = '<span class="btn-icon">✓</span> COPIED ALL';
-      copyAllBtn.classList.add("btn-primary");
-      copyAllBtn.classList.remove("btn-secondary");
-
-      setTimeout(() => {
-        copyAllBtn.innerHTML = originalHtml;
-        copyAllBtn.classList.remove("btn-primary");
-        copyAllBtn.classList.add("btn-secondary");
-      }, 2000);
-    }
-  );
+  const onSuccessCallback = () => {
+    copyAllBtn.innerHTML = '<span class="btn-icon">✓</span> COPIED ALL';
+    copyAllBtn.classList.add("is-copied");
+    setTimeout(() => {
+      copyAllBtn.innerHTML = originalHtml;
+      copyAllBtn.classList.remove("is-copied");
+    }, 2000);
+  };
+  onSuccessCallback();
 }
 
-/**
- * Open the "Create New Snippet" modal and reset form fields
- */
 function openModal() {
   lastFocusedElement = document.activeElement;
   createSnippetForm.reset();
@@ -989,53 +752,31 @@ function openModal() {
   contentCharCount.textContent = "0 / 10000";
   contentCharCount.classList.remove("is-limit");
   hideFormError();
-
   createModal.classList.remove("hidden");
-  document.body.style.overflow = "hidden"; // Prevent background scroll
-
-  // Focus on title input after opening
-  setTimeout(() => {
-    snippetTitle.focus();
-  }, 50);
+  document.body.style.overflow = "hidden";
+  setTimeout(() => snippetTitle.focus(), 50);
 }
 
-/**
- * Close the "Create New Snippet" modal
- */
 function closeModal() {
   createModal.classList.add("hidden");
   document.body.style.overflow = "";
   hideFormError();
-
-  // Restore focus to triggering element
-  if (lastFocusedElement && typeof lastFocusedElement.focus === "function") {
-    lastFocusedElement.focus();
-  }
+  if (lastFocusedElement && typeof lastFocusedElement.focus === "function") lastFocusedElement.focus();
 }
 
-/**
- * Display a temporary floating toast notification
- */
 function showToast(message) {
   if (!toast || !toastMessage) return;
-
   if (toastTimeoutId) {
     clearTimeout(toastTimeoutId);
     toastTimeoutId = null;
   }
-
   toastMessage.textContent = message;
   toast.classList.remove("hidden");
-
   toastTimeoutId = setTimeout(() => {
     toast.classList.add("hidden");
     toastTimeoutId = null;
   }, 2800);
 }
-
-// ==========================================
-// 6. HELPER & UTILITY FUNCTIONS
-// ==========================================
 
 function displayFormError(msg) {
   formError.textContent = msg;
@@ -1048,13 +789,9 @@ function hideFormError() {
 }
 
 function setSavingState(isSaving) {
-  if (isSaving) {
-    saveSnippetBtn.disabled = true;
-    saveSnippetBtn.querySelector(".btn-text").textContent = "Saving...";
-  } else {
-    saveSnippetBtn.disabled = false;
-    saveSnippetBtn.querySelector(".btn-text").textContent = "Save Snippet";
-  }
+  saveSnippetBtn.disabled = isSaving;
+  const btnText = saveSnippetBtn.querySelector(".btn-text");
+  if (btnText) btnText.textContent = isSaving ? "Saving..." : "Save Snippet";
 }
 
 function showErrorState(message) {
@@ -1064,59 +801,29 @@ function showErrorState(message) {
 
   const titleEl = errorState.querySelector(".state-title");
   const descEl = errorState.querySelector(".state-desc");
-
   const parts = message.split("\n\n");
   if (parts.length >= 2) {
     titleEl.textContent = parts[0];
     descEl.textContent = parts[1];
   } else {
     titleEl.textContent = message;
-    descEl.textContent = "";
+    descEl.textContent = "Please check your network connection and try again.";
   }
-
   errorState.classList.remove("hidden");
 }
 
-/**
- * Format timestamp into human-readable representation
- */
 function formatTimestamp(isoString) {
   if (!isoString) return "";
-  try {
-    const date = new Date(isoString);
-    if (isNaN(date.getTime())) return "";
-
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) return `${diffDays}d ago`;
-
-    // Format full date e.g. "Sep 7, 2026"
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined
-    });
-  } catch {
-    return "";
-  }
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return "";
+  const diffSec = Math.floor((Date.now() - date) / 1000);
+  if (diffSec < 60) return "Just now";
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  if (diffSec < 604800) return `${Math.floor(diffSec / 86400)}d ago`;
+  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-// ==========================================
-// 7. ZIP EXPORT & IMPORT SYSTEM
-// ==========================================
-
-/**
- * Sanitize a string for safe usage in a file or directory name across platforms.
- * Strips invalid characters: < > : " / \ | ? * \0 and control chars.
- */
 function sanitizeFilename(name) {
   if (!name || typeof name !== "string") return "snippet";
   let cleaned = name
@@ -1125,74 +832,38 @@ function sanitizeFilename(name) {
     .trim()
     .replace(/_+/g, "_")
     .replace(/^[_.\s]+|[_.\s]+$/g, "");
-  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i.test(cleaned)) {
-    cleaned = `_${cleaned}`;
-  }
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i.test(cleaned)) cleaned = `_${cleaned}`;
   return cleaned.slice(0, 60).trim() || "snippet";
 }
 
-/**
- * Determine suitable file extension based on category and content heuristics.
- */
 function getSnippetExtension(category, content) {
   const cat = (category || "").toLowerCase();
   const text = (content || "").trim();
 
   if (cat === "programming") {
-    if (/^\s*def\s+[a-zA-Z_]|import\s+[a-zA-Z_]|elif\s+|if\s+__name__\s*==/m.test(text)) {
-      return "py";
-    }
-    if (/^\s*<!DOCTYPE\s+html|<html|<body|<div|<head/i.test(text)) {
-      return "html";
-    }
-    if (/[{;][\s\n]*[a-zA-Z-]+:\s*[^;]+;/m.test(text) && !text.includes("function") && !text.includes("const ")) {
-      return "css";
-    }
-    if (/^\s*(SELECT|INSERT\s+INTO|CREATE\s+TABLE|UPDATE|DELETE\s+FROM|ALTER\s+TABLE)\s+/i.test(text)) {
-      return "sql";
-    }
+    if (/^\s*def\s+[a-zA-Z_]|import\s+[a-zA-Z_]|elif\s+|if\s+__name__\s*==/m.test(text)) return "py";
+    if (/^\s*<!DOCTYPE\s+html|<html|<body|<div|<head/i.test(text)) return "html";
+    if (/[{;][\s\n]*[a-zA-Z-]+:\s*[^;]+;/m.test(text) && !text.includes("function") && !text.includes("const ")) return "css";
+    if (/^\s*(SELECT|INSERT\s+INTO|CREATE\s+TABLE|UPDATE|DELETE\s+FROM|ALTER\s+TABLE)\s+/i.test(text)) return "sql";
     if ((text.startsWith("{") && text.endsWith("}")) || (text.startsWith("[") && text.endsWith("]"))) {
-      try {
-        JSON.parse(text);
-        return "json";
-      } catch {}
+      try { JSON.parse(text); return "json"; } catch {}
     }
-    if (/\b(interface|type|enum)\s+[A-Z]|\b:\s*(string|number|boolean|any)\b/.test(text)) {
-      return "ts";
-    }
+    if (/\b(interface|type|enum)\s+[A-Z]|\b:\s*(string|number|boolean|any)\b/.test(text)) return "ts";
     return "js";
   }
-
   if (cat === "commands") {
-    if (/^\s*(SELECT|INSERT|CREATE|UPDATE|DELETE)\s+/i.test(text)) {
-      return "sql";
-    }
-    if (/^\s*(Get-|Set-|New-|Remove-|Start-|Stop-|\$[a-zA-Z_])/m.test(text) || text.includes("powershell")) {
-      return "ps1";
-    }
-    if (/^@echo\b|^rem\b/im.test(text)) {
-      return "bat";
-    }
+    if (/^\s*(SELECT|INSERT|CREATE|UPDATE|DELETE)\s+/i.test(text)) return "sql";
+    if (/^\s*(Get-|Set-|New-|Remove-|Start-|Stop-|\$[a-zA-Z_])/m.test(text) || text.includes("powershell")) return "ps1";
+    if (/^@echo\b|^rem\b/im.test(text)) return "bat";
     return "sh";
   }
-
   if (cat === "notes" || cat === "thesis" || cat === "assignment") {
-    if (/^#{1,6}\s+|^\s*[-*+]\s+|```|\*\*[\w\s]+\*\*/m.test(text)) {
-      return "md";
-    }
+    if (/^#{1,6}\s+|^\s*[-*+]\s+|```|\*\*[\w\s]+\*\*/m.test(text)) return "md";
     return "txt";
   }
-
-  if (cat === "links") {
-    return "txt";
-  }
-
   return "txt";
 }
 
-/**
- * Trigger client-side file download for a Blob object.
- */
 function triggerBlobDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1207,134 +878,63 @@ function triggerBlobDownload(blob, filename) {
   }, 150);
 }
 
-/**
- * Export a list of snippets as an organized ZIP archive.
- * Formats files into snippets/<Category>/<Title>.<ext>, includes quickcopy-backup.json
- * and a README.txt, and compresses with DEFLATE.
- */
 async function exportSnippetsToZip(snippetsList, archiveFilename, buttonElement) {
-  if (!snippetsList || snippetsList.length === 0) {
-    showToast("No snippets to export.");
-    return;
-  }
+  if (!snippetsList || snippetsList.length === 0) return showToast("No snippets to export.");
+  if (typeof JSZip === "undefined") return showToast("ZIP library not loaded. Please check your connection.");
 
-  if (typeof JSZip === "undefined") {
-    showToast("ZIP library not loaded. Please check your connection.");
-    return;
-  }
-
-  let originalHtml = "";
+  const orig = buttonElement ? buttonElement.innerHTML : "";
   if (buttonElement) {
-    originalHtml = buttonElement.innerHTML;
     buttonElement.disabled = true;
     buttonElement.innerHTML = '<span class="btn-icon">⏳</span> Generating...';
   }
 
   try {
-    const zip = new JSZip();
-    const usedPaths = new Set();
-
-    // 1. Add individual snippet files into folder structure
-    snippetsList.forEach((snippet) => {
-      const cat = snippet.category || "General";
-      const ext = getSnippetExtension(cat, snippet.content || "");
-      const baseName = sanitizeFilename(snippet.title || "snippet");
-      
-      let filePath = `snippets/${cat}/${baseName}.${ext}`;
-      let counter = 1;
-      while (usedPaths.has(filePath)) {
-        filePath = `snippets/${cat}/${baseName}_${counter}.${ext}`;
-        counter++;
-      }
-      usedPaths.add(filePath);
-
-      zip.file(filePath, snippet.content || "");
+    const zip = new JSZip(), used = new Set();
+    snippetsList.forEach((s) => {
+      const cat = s.category || "General";
+      const ext = getSnippetExtension(cat, s.content || "");
+      const base = sanitizeFilename(s.title || "snippet");
+      let p = `snippets/${cat}/${base}.${ext}`, c = 1;
+      while (used.has(p)) p = `snippets/${cat}/${base}_${c++}.${ext}`;
+      used.add(p);
+      zip.file(p, s.content || "");
     });
 
-    // 2. Add quickcopy-backup.json with full structured metadata
-    const backupData = snippetsList.map((s) => ({
-      id: s.id || "",
-      title: s.title || "Untitled Snippet",
-      category: s.category || "General",
-      content: s.content || "",
-      created_at: s.created_at || new Date().toISOString()
-    }));
-    zip.file("quickcopy-backup.json", JSON.stringify(backupData, null, 2));
+    zip.file("quickcopy-backup.json", JSON.stringify(snippetsList.map((s) => ({
+      id: s.id || "", title: s.title || "Untitled Snippet", category: s.category || "General", content: s.content || "", created_at: s.created_at || new Date().toISOString()
+    })), null, 2));
+    zip.file("README.txt", `QuickCopy Archive\nExported: ${new Date().toISOString()}\nSnippets: ${snippetsList.length}\nImport back via QuickCopy.`);
 
-    // 3. Add friendly README.txt
-    const readmeContent = [
-      "QuickCopy Snippets Archive",
-      "==========================",
-      `Exported: ${new Date().toLocaleString()}`,
-      `Total Snippets: ${snippetsList.length}`,
-      "",
-      "This archive was generated by QuickCopy (Share • Copy • Done).",
-      "",
-      "Contents:",
-      '1. "snippets/<Category>/" - Code and text files organized by category.',
-      '2. "quickcopy-backup.json" - Full snippet records with JSON metadata and timestamps.',
-      "",
-      "Importing:",
-      "You can restore or import these snippets back into QuickCopy at any time:",
-      '1. Open QuickCopy in your browser.',
-      '2. Click "Import ZIP" in the toolbar.',
-      "3. Drag and drop this ZIP file into the import dialog.",
-      '4. Preview your snippets and click "Import Snippets".'
-    ].join("\r\n");
-    zip.file("README.txt", readmeContent);
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+    triggerBlobDownload(blob, archiveFilename || `quickcopy-backup-${new Date().toISOString().slice(0, 10)}.zip`);
 
-    // 4. Generate ZIP blob with DEFLATE compression
-    const blob = await zip.generateAsync({
-      type: "blob",
-      compression: "DEFLATE",
-      compressionOptions: { level: 6 }
-    });
-
-    // 5. Trigger download
-    const filename = archiveFilename || `quickcopy-backup-${new Date().toISOString().slice(0, 10)}.zip`;
-    triggerBlobDownload(blob, filename);
-
-    // 6. Tactile button feedback
     if (buttonElement) {
       buttonElement.innerHTML = '<span class="btn-icon">✓</span> Downloaded';
       buttonElement.classList.add("is-copied");
-
       setTimeout(() => {
-        buttonElement.innerHTML = originalHtml;
+        buttonElement.innerHTML = orig;
         buttonElement.disabled = false;
         buttonElement.classList.remove("is-copied");
       }, 2000);
     }
-
     showToast(`Exported ${snippetsList.length} snippet${snippetsList.length === 1 ? "" : "s"} to ZIP!`);
   } catch (err) {
     console.error("[QuickCopy] Error exporting ZIP archive:", err);
     if (buttonElement) {
-      buttonElement.innerHTML = originalHtml;
+      buttonElement.innerHTML = orig;
       buttonElement.disabled = false;
     }
     showToast("Failed to generate ZIP export.");
   }
 }
 
-/**
- * Download a single snippet packaged into its own .zip file.
- * Contains the snippet file, snippet.json metadata, and a README.txt.
- */
 async function downloadSingleSnippetZip(snippet, buttonElement) {
   if (!snippet) return;
+  if (isFullZipSnippet(snippet)) return downloadFullZipSnippet(snippet, buttonElement);
+  if (typeof JSZip === "undefined") return showToast("ZIP library not loaded. Please check your connection.");
 
-  if (typeof JSZip === "undefined") {
-    showToast("ZIP library not loaded. Please check your connection.");
-    return;
-  }
-
-  let originalText = "";
-  if (buttonElement) {
-    originalText = buttonElement.textContent;
-    buttonElement.disabled = true;
-    buttonElement.textContent = "⏳ ZIP";
-  }
+  const orig = buttonElement ? buttonElement.textContent : "";
+  if (buttonElement) { buttonElement.disabled = true; buttonElement.textContent = "⏳ ZIP"; }
 
   try {
     const zip = new JSZip();
@@ -1342,128 +942,153 @@ async function downloadSingleSnippetZip(snippet, buttonElement) {
     const ext = getSnippetExtension(cat, snippet.content || "");
     const safeTitle = sanitizeFilename(snippet.title || "snippet");
     let codeFileName = `${safeTitle}.${ext}`;
-    if (codeFileName.toLowerCase() === "snippet.json" || codeFileName.toLowerCase() === "readme.txt") {
-      codeFileName = `${safeTitle}_code.${ext}`;
-    }
+    if (/^(snippet\.json|readme\.txt)$/i.test(codeFileName)) codeFileName = `${safeTitle}_code.${ext}`;
 
-    // 1. Snippet code/text file
     zip.file(codeFileName, snippet.content || "");
-
-    // 2. snippet.json metadata
-    const meta = {
-      id: snippet.id || "",
-      title: snippet.title || "Untitled Snippet",
-      category: cat,
-      content: snippet.content || "",
-      created_at: snippet.created_at || new Date().toISOString()
-    };
-    zip.file("snippet.json", JSON.stringify(meta, null, 2));
-
-    // 3. README.txt
-    const readmeContent = [
-      "QuickCopy Snippet Export",
-      "========================",
-      `Title: ${snippet.title || "Untitled Snippet"}`,
-      `Category: ${cat}`,
-      `Created: ${snippet.created_at ? new Date(snippet.created_at).toLocaleString() : new Date().toLocaleString()}`,
-      "",
-      "Files in this archive:",
-      `- ${codeFileName}: Source content of the snippet`,
-      "- snippet.json: Structured JSON metadata",
-      "",
-      "This snippet can be imported back into QuickCopy at any time via the Import ZIP modal."
-    ].join("\r\n");
-    zip.file("README.txt", readmeContent);
-
-    // 4. Generate ZIP blob with DEFLATE compression
-    const blob = await zip.generateAsync({
-      type: "blob",
-      compression: "DEFLATE",
-      compressionOptions: { level: 6 }
-    });
-
-    // 5. Trigger download
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
     triggerBlobDownload(blob, `quickcopy-${safeTitle}.zip`);
 
-    // 6. Button feedback
-    if (buttonElement) {
-      buttonElement.textContent = "✓ ZIP";
-      buttonElement.classList.add("is-downloaded");
-
-      setTimeout(() => {
-        buttonElement.textContent = originalText;
-        buttonElement.disabled = false;
-        buttonElement.classList.remove("is-downloaded");
-      }, 2000);
-    }
-
+    setBtnState(buttonElement, "✓ ZIP", true, orig);
     showToast("Downloaded snippet ZIP!");
   } catch (err) {
     console.error("[QuickCopy] Error downloading snippet ZIP:", err);
-    if (buttonElement) {
-      buttonElement.textContent = originalText;
-      buttonElement.disabled = false;
-    }
+    if (buttonElement) { buttonElement.textContent = orig; buttonElement.disabled = false; }
     showToast("Failed to download snippet ZIP.");
   }
 }
 
-/**
- * Format bytes into human-readable string (KB, MB).
- */
+async function downloadFullZipSnippet(snippet, buttonElement) {
+  if (!snippet) return;
+  const descriptor = parseZipDescriptor(snippet) || {};
+  const orig = buttonElement ? buttonElement.textContent : "";
+  if (buttonElement) { buttonElement.disabled = true; buttonElement.textContent = "⏳ Downloading..."; }
+
+  try {
+    let zipBlob = await getZipBlobFromDB(snippet.id);
+    if (!zipBlob && descriptor.base64) zipBlob = base64ToBlob(descriptor.base64, "application/zip");
+    if (!zipBlob && currentZipBlob) zipBlob = currentZipBlob;
+    if (!zipBlob && typeof JSZip !== "undefined") {
+      const zip = new JSZip();
+      if (descriptor.files && descriptor.files.length > 0) {
+        descriptor.files.forEach((f) => zip.file(f.name, f.content || ""));
+      } else {
+        zip.file("README.txt", `QuickCopy Archive: ${snippet.title}\nExported from QuickCopy.`);
+      }
+      zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+    }
+
+    if (!zipBlob) {
+      showToast("Archive binary unavailable.");
+      if (buttonElement) { buttonElement.textContent = orig; buttonElement.disabled = false; }
+      return;
+    }
+
+    const filename = descriptor.fileName || (snippet.title.endsWith(".zip") ? snippet.title : `${snippet.title}.zip`);
+    triggerBlobDownload(zipBlob, filename);
+
+    setBtnState(buttonElement, "✓ Downloaded", true, orig);
+    showToast("Downloaded full ZIP file!");
+  } catch (err) {
+    console.error("[QuickCopy] Error downloading full ZIP:", err);
+    if (buttonElement) { buttonElement.textContent = orig; buttonElement.disabled = false; }
+    showToast("Failed to download ZIP file.");
+  }
+}
+
+async function extractAndSplitZipSnippet(snippet, buttonElement) {
+  if (!snippet) return;
+  if (typeof JSZip === "undefined") return showToast("JSZip library not loaded. Please refresh.");
+
+  const orig = buttonElement ? buttonElement.textContent : "";
+  if (buttonElement) { buttonElement.disabled = true; buttonElement.textContent = "⏳ Extracting..."; }
+
+  try {
+    const descriptor = parseZipDescriptor(snippet) || {};
+    let zipBlob = (await getZipBlobFromDB(snippet.id)) || (descriptor.base64 ? base64ToBlob(descriptor.base64) : currentZipBlob);
+    if (!zipBlob) {
+      showToast("Cannot extract: ZIP data is not cached on this device.");
+      if (buttonElement) { buttonElement.textContent = orig; buttonElement.disabled = false; }
+      return;
+    }
+
+    const zip = await JSZip.loadAsync(zipBlob);
+    const extracted = await extractTextSnippetsFromZip(zip);
+    if (extracted.length === 0) {
+      showToast("No valid text files found inside this archive.");
+      if (buttonElement) { buttonElement.textContent = orig; buttonElement.disabled = false; }
+      return;
+    }
+
+    const now = Date.now();
+    if (isDemoMode) {
+      const items = extracted.map((s, idx) => ({
+        id: `demo-${now}-${idx}`,
+        title: s.title,
+        category: s.category,
+        content: s.content,
+        created_at: new Date(now - idx * 1000).toISOString()
+      }));
+      allSnippets.unshift(...items);
+      saveDemoSnippets();
+    } else {
+      const payload = extracted.map((s) => ({ title: s.title, category: s.category, content: s.content }));
+      const { data } = await supabaseClient.from("snippets").insert(payload).select();
+      if (data && data.length > 0) allSnippets.unshift(...data);
+      else allSnippets.unshift(...extracted.map((s, idx) => ({ id: `ext-${now}-${idx}`, title: s.title, category: s.category, content: s.content, created_at: new Date().toISOString() })));
+    }
+
+    filterSnippets();
+    setBtnState(buttonElement, "✓ Extracted", true, orig);
+    showToast(`Extracted ${extracted.length} snippets from ZIP archive!`);
+  } catch (err) {
+    console.error("[QuickCopy] Error extracting archive:", err);
+    if (buttonElement) { buttonElement.textContent = orig; buttonElement.disabled = false; }
+    showToast("Failed to extract snippets.");
+  }
+}
+
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const k = 1024, sizes = ["B", "KB", "MB", "GB"], i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
-/**
- * Open the "Import Snippets from ZIP" modal.
- */
 function openZipModal() {
   lastFocusedElement = document.activeElement;
   resetZipModalState();
-
   uploadZipModal.classList.remove("hidden");
   document.body.style.overflow = "hidden";
-
-  setTimeout(() => {
-    zipDropzone.focus();
-  }, 50);
+  setTimeout(() => zipDropzone.focus(), 50);
 }
 
-/**
- * Close the "Import Snippets from ZIP" modal.
- */
 function closeZipModal() {
   uploadZipModal.classList.add("hidden");
   document.body.style.overflow = "";
   resetZipModalState();
-
-  if (lastFocusedElement && typeof lastFocusedElement.focus === "function") {
-    lastFocusedElement.focus();
-  }
+  if (lastFocusedElement && typeof lastFocusedElement.focus === "function") lastFocusedElement.focus();
 }
 
-/**
- * Reset all state, form fields, and preview items in the ZIP modal.
- */
 function resetZipModalState() {
   parsedZipSnippets = [];
+  currentZipFile = currentZipBlob = null;
+  currentZipFilesMeta = [];
   if (zipFileInput) zipFileInput.value = "";
-  if (zipCategoryOption) zipCategoryOption.value = "auto";
-  if (zipFileInfo) zipFileInfo.classList.add("hidden");
+  if (zipModeFull) zipModeFull.checked = true;
+  if (zipModeExtract) zipModeExtract.checked = false;
+  if (zipCategoryOption) zipCategoryOption.value = "ZIP Archive";
+  [zipFileInfo, zipFullDetailsSection, zipPreviewSection].forEach((el) => el && el.classList.add("hidden"));
   if (zipFileName) zipFileName.textContent = "";
   if (zipFileSize) zipFileSize.textContent = "";
-  if (zipPreviewSection) zipPreviewSection.classList.add("hidden");
+  if (zipFullTitle) zipFullTitle.value = "";
+  if (zipFullSummary) zipFullSummary.textContent = "";
+  if (zipFullFileList) zipFullFileList.innerHTML = "";
   if (zipPreviewList) zipPreviewList.innerHTML = "";
   if (zipPreviewSummary) zipPreviewSummary.textContent = "Found 0 snippets";
   if (zipSelectAllCheckbox) zipSelectAllCheckbox.checked = true;
   if (confirmZipImportBtn) {
     confirmZipImportBtn.disabled = true;
-    confirmZipImportBtn.querySelector(".btn-text").textContent = "Import Snippets";
+    const btnText = confirmZipImportBtn.querySelector(".btn-text");
+    if (btnText) btnText.textContent = "Save Full ZIP File";
   }
   hideZipError();
 }
@@ -1484,291 +1109,277 @@ function setImportingState(isImporting) {
   if (!confirmZipImportBtn) return;
   confirmZipImportBtn.disabled = isImporting;
   const btnText = confirmZipImportBtn.querySelector(".btn-text");
-  if (btnText) {
-    btnText.textContent = isImporting ? "Importing..." : "Import Snippets";
-  }
+  if (btnText) btnText.textContent = isImporting ? "Importing..." : "Import Snippets";
 }
 
-/**
- * Validate category string against allowed application categories.
- */
 function normalizeCategory(cat) {
-  const valid = ["General", "Programming", "Thesis", "Assignment", "Commands", "Notes", "Links", "Other"];
+  const valid = ["General", "Programming", "Thesis", "Assignment", "Commands", "Notes", "Links", "Other", "ZIP Archive"];
   if (!cat || typeof cat !== "string") return "General";
-  const match = valid.find((c) => c.toLowerCase() === cat.trim().toLowerCase());
-  return match || "General";
+  return valid.find((c) => c.toLowerCase() === cat.trim().toLowerCase()) || "General";
 }
 
-/**
- * Handle a user-selected ZIP file, perform security checks, and parse snippets.
- */
 async function handleSelectedZipFile(file) {
   hideZipError();
   if (!file) return;
+  if (!file.name || !file.name.toLowerCase().endsWith(".zip")) return displayZipError("Please select a valid .zip file archive.");
+  if (file.size > 25 * 1024 * 1024) return displayZipError("File exceeds the 25MB size limit. Please choose a smaller ZIP archive.");
 
-  // 1. File name extension check
-  if (!file.name || !file.name.toLowerCase().endsWith(".zip")) {
-    displayZipError("Please select a valid .zip file archive.");
-    return;
-  }
-
-  // 2. File size safety check (Reject files > 25MB to prevent zip bombs/memory overflow)
-  const MAX_SIZE_BYTES = 25 * 1024 * 1024;
-  if (file.size > MAX_SIZE_BYTES) {
-    displayZipError("File exceeds the 25MB size limit. Please choose a smaller ZIP archive.");
-    return;
-  }
-
-  // 3. Display file details
   zipFileName.textContent = file.name;
   zipFileSize.textContent = `(${formatBytes(file.size)})`;
   zipFileInfo.classList.remove("hidden");
 
-  // 4. Verify JSZip availability
   if (typeof JSZip === "undefined") {
-    displayZipError("JSZip library is not loaded. Please refresh and check your internet connection.");
-    return;
+    return displayZipError("JSZip library is not loaded. Please refresh and check your internet connection.");
   }
 
   try {
     const zip = await JSZip.loadAsync(file);
-
-    // 5. Path traversal protection: Ensure no relative "../" or "..\\" paths exist
-    for (const relativePath of Object.keys(zip.files)) {
-      if (relativePath.includes("../") || relativePath.includes("..\\")) {
-        displayZipError("Security alert: The archive contains unsafe relative path references (path traversal attempt).");
-        return;
+    for (const p of Object.keys(zip.files)) {
+      if (p.includes("../") || p.includes("..\\")) {
+        return displayZipError("Security alert: The archive contains unsafe relative path references (path traversal attempt).");
       }
     }
 
-    parsedZipSnippets = [];
-    const MAX_IMPORT_LIMIT = 250;
+    currentZipFile = currentZipBlob = file;
+    currentZipFilesMeta = [];
 
-    // 6. Check for structured JSON backup (quickcopy-backup.json, snippets.json, or snippet.json)
-    const backupKey = Object.keys(zip.files).find((k) => {
-      const lower = k.toLowerCase().replace(/\\/g, "/");
-      const name = lower.split("/").pop();
-      return name === "quickcopy-backup.json" || name === "snippets.json" || name === "snippet.json";
-    });
-
-    if (backupKey && !zip.files[backupKey].dir) {
-      try {
-        const jsonContent = await zip.files[backupKey].async("string");
-        const parsed = JSON.parse(jsonContent);
-        const snippetRecords = Array.isArray(parsed) ? parsed : [parsed];
-
-        for (const item of snippetRecords) {
-          if (parsedZipSnippets.length >= MAX_IMPORT_LIMIT) break;
-          if (!item || typeof item !== "object") continue;
-          const rawTitle = typeof item.title === "string" ? item.title.trim() : "";
-          const title = rawTitle.slice(0, 100) || "Imported Snippet";
-          const rawContent = typeof item.content === "string" ? item.content : "";
-          if (!rawContent.trim()) continue;
-          const content = rawContent.slice(0, 10000);
-          const origCategory = normalizeCategory(item.category);
-
-          parsedZipSnippets.push({
-            title,
-            category: origCategory,
-            originalCategory: origCategory,
-            content,
-            checked: true
-          });
-        }
-      } catch (jsonErr) {
-        console.warn("[QuickCopy] Backup JSON parse error, falling back to individual file extraction:", jsonErr);
-      }
+    for (const [entryPath, entry] of Object.entries(zip.files)) {
+      if (entry.dir) continue;
+      const normalized = entryPath.replace(/\\/g, "/");
+      const segments = normalized.split("/");
+      if (segments.some((seg) => seg === "__MACOSX" || seg === ".DS_Store")) continue;
+      currentZipFilesMeta.push({ name: normalized, size: entry._data ? (entry._data.uncompressedSize || 0) : 0 });
     }
 
-    // 7. If no JSON backup was found or parsed, iterate through all individual files
-    if (parsedZipSnippets.length === 0) {
-      const binaryExtensions = new Set([
-        "png", "jpg", "jpeg", "gif", "bmp", "ico", "webp", "tiff", "psd",
-        "exe", "dll", "so", "dylib", "bin", "iso", "img", "dmg",
-        "zip", "tar", "gz", "7z", "rar", "bz2", "xz",
-        "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-        "mp3", "wav", "flac", "aac", "ogg", "mp4", "mkv", "avi", "mov", "wmv",
-        "ttf", "otf", "woff", "woff2", "eot",
-        "class", "jar", "pyc", "pyo", "o", "obj"
-      ]);
-
-      const validCategories = ["General", "Programming", "Thesis", "Assignment", "Commands", "Notes", "Links", "Other"];
-
-      for (const [entryPath, entry] of Object.entries(zip.files)) {
-        if (parsedZipSnippets.length >= MAX_IMPORT_LIMIT) break;
-        if (entry.dir) continue;
-
-        const normalized = entryPath.replace(/\\/g, "/");
-        const segments = normalized.split("/");
-        const fileName = segments[segments.length - 1];
-
-        // Skip hidden and system files (__MACOSX, .DS_Store, .git, or files starting with .)
-        if (segments.some((seg) => seg === "__MACOSX" || seg === ".DS_Store" || seg === ".git" || seg.startsWith("."))) {
-          continue;
-        }
-        if (!fileName || fileName.startsWith(".")) continue;
-
-        // Skip readme and metadata files during raw file extraction
-        const lowerName = fileName.toLowerCase();
-        if (
-          lowerName === "readme.txt" ||
-          lowerName === "readme.md" ||
-          lowerName === "snippet.json" ||
-          lowerName === "snippets.json" ||
-          lowerName === "quickcopy-backup.json"
-        ) {
-          continue;
-        }
-
-        // Skip binary extensions
-        const dotIndex = fileName.lastIndexOf(".");
-        const extension = dotIndex >= 0 ? fileName.slice(dotIndex + 1).toLowerCase() : "";
-        if (binaryExtensions.has(extension)) continue;
-
-        // Read text content
-        let textContent = "";
-        try {
-          textContent = await entry.async("string");
-        } catch {
-          continue;
-        }
-
-        if (!textContent || !textContent.trim()) continue;
-
-        // Skip binary files that contain null bytes
-        if (textContent.includes("\0")) continue;
-
-        // Title from filename (strip extension, trim, max 100 chars)
-        const baseName = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
-        const title = baseName.trim().slice(0, 100) || "Imported Snippet";
-
-        // Enforce content length limit (10,000 chars)
-        const content = textContent.slice(0, 10000);
-
-        // Infer category from folder structure or extension
-        let inferredCategory = "General";
-
-        // Check if any parent folder matches a category name
-        for (let i = 0; i < segments.length - 1; i++) {
-          const match = validCategories.find((c) => c.toLowerCase() === segments[i].toLowerCase());
-          if (match) {
-            inferredCategory = match;
-            break;
-          }
-        }
-
-        if (inferredCategory === "General") {
-          // Infer from file extension
-          if (["js", "ts", "jsx", "tsx", "py", "html", "htm", "css", "c", "cpp", "cs", "java", "go", "rs", "php", "rb"].includes(extension)) {
-            inferredCategory = "Programming";
-          } else if (["sh", "bash", "bat", "cmd", "ps1", "sql"].includes(extension)) {
-            inferredCategory = "Commands";
-          } else if (["md", "txt"].includes(extension)) {
-            inferredCategory = "Notes";
-          }
-        }
-
-        parsedZipSnippets.push({
-          title,
-          category: inferredCategory,
-          originalCategory: inferredCategory,
-          content,
-          checked: true
-        });
-      }
+    if (zipFullTitle) zipFullTitle.value = file.name.slice(0, 100);
+    if (zipFullSummary) zipFullSummary.textContent = `📦 ${currentZipFilesMeta.length} file${currentZipFilesMeta.length === 1 ? "" : "s"} inside • ${formatBytes(file.size)}`;
+    if (zipFullFileList) {
+      zipFullFileList.innerHTML = "";
+      currentZipFilesMeta.forEach((item) => {
+        zipFullFileList.appendChild(makeEl("div", "zip-card-file-item", undefined, [
+          makeEl("span", "zip-card-file-name", item.name),
+          makeEl("span", "zip-card-file-size", formatBytes(item.size))
+        ]));
+      });
     }
 
-    if (parsedZipSnippets.length === 0) {
-      displayZipError("No valid text or code snippets found in this ZIP archive.");
-      return;
-    }
+    parsedZipSnippets = await extractTextSnippetsFromZip(zip);
+    if (parsedZipSnippets.length === 0) return displayZipError("No valid text or code snippets found in this ZIP archive.");
 
-    // Apply category option if user previously set a forced category
-    const forcedCategory = zipCategoryOption ? zipCategoryOption.value : "auto";
-    if (forcedCategory !== "auto") {
+    const forcedCategory = zipCategoryOption ? zipCategoryOption.value : "ZIP Archive";
+    if (forcedCategory !== "auto" && forcedCategory !== "ZIP Archive") {
       parsedZipSnippets.forEach((s) => (s.category = forcedCategory));
     }
 
-    // Render preview
     renderZipPreview();
+    updateZipModalModeUI();
   } catch (err) {
     console.error("[QuickCopy] Error reading ZIP file:", err);
     displayZipError("Failed to extract ZIP archive. Please ensure it is a valid, uncorrupted ZIP file.");
   }
 }
 
-/**
- * Handle category dropdown changes in the ZIP import modal.
- */
+async function extractTextSnippetsFromZip(zip) {
+  const snippets = [];
+  const MAX_LIMIT = 250;
+
+  const backupKey = Object.keys(zip.files).find((k) => {
+    const name = k.toLowerCase().replace(/\\/g, "/").split("/").pop();
+    return name === "quickcopy-backup.json" || name === "snippets.json" || name === "snippet.json";
+  });
+
+  if (backupKey && !zip.files[backupKey].dir) {
+    try {
+      const parsed = JSON.parse(await zip.files[backupKey].async("string"));
+      const items = Array.isArray(parsed) ? parsed : [parsed];
+
+      for (const item of items) {
+        if (snippets.length >= MAX_LIMIT) break;
+        if (!item || typeof item !== "object") continue;
+        const rawTitle = typeof item.title === "string" ? item.title.trim() : "";
+        const title = rawTitle.slice(0, 100) || "Imported Snippet";
+        const rawContent = typeof item.content === "string" ? item.content : "";
+        if (!rawContent.trim()) continue;
+        const origCategory = normalizeCategory(item.category);
+        snippets.push({ title, category: origCategory, originalCategory: origCategory, content: rawContent.slice(0, 10000), checked: true });
+      }
+    } catch (e) {
+      console.warn("[QuickCopy] Backup parse fallback:", e);
+    }
+  }
+
+  if (snippets.length === 0) {
+    const binaryExts = new Set("png,jpg,jpeg,gif,bmp,ico,webp,tiff,psd,exe,dll,so,dylib,bin,iso,img,dmg,zip,tar,gz,7z,rar,bz2,xz,pdf,doc,docx,xls,xlsx,ppt,pptx,mp3,wav,flac,aac,ogg,mp4,mkv,avi,mov,wmv,ttf,otf,woff,woff2,eot,class,jar,pyc,pyo,o,obj".split(","));
+    const validCats = ["General", "Programming", "Thesis", "Assignment", "Commands", "Notes", "Links", "Other"];
+
+    for (const [entryPath, entry] of Object.entries(zip.files)) {
+      if (snippets.length >= MAX_LIMIT) break;
+      if (entry.dir) continue;
+
+      const segments = entryPath.replace(/\\/g, "/").split("/");
+      const fileName = segments[segments.length - 1];
+      if (segments.some((seg) => seg === "__MACOSX" || seg === ".DS_Store" || seg === ".git" || seg.startsWith("."))) continue;
+      if (!fileName || fileName.startsWith(".")) continue;
+
+      const lowerName = fileName.toLowerCase();
+      if (["readme.txt", "readme.md", "snippet.json", "snippets.json", "quickcopy-backup.json"].includes(lowerName)) continue;
+
+      const dotIdx = fileName.lastIndexOf(".");
+      const ext = dotIdx >= 0 ? fileName.slice(dotIdx + 1).toLowerCase() : "";
+      if (binaryExts.has(ext)) continue;
+
+      let text = "";
+      try { text = await entry.async("string"); } catch { continue; }
+      if (!text || !text.trim() || text.includes("\0")) continue;
+
+      const baseName = dotIdx > 0 ? fileName.slice(0, dotIdx) : fileName;
+      const title = baseName.trim().slice(0, 100) || "Imported Snippet";
+
+      let inferredCategory = "General";
+      for (let i = 0; i < segments.length - 1; i++) {
+        const m = validCats.find((c) => c.toLowerCase() === segments[i].toLowerCase());
+        if (m) { inferredCategory = m; break; }
+      }
+      if (inferredCategory === "General") {
+        if (/^(js|ts|jsx|tsx|py|html?|css|c|cpp|cs|java|go|rs|php|rb)$/.test(ext)) inferredCategory = "Programming";
+        else if (/^(sh|bash|bat|cmd|ps1|sql)$/.test(ext)) inferredCategory = "Commands";
+        else if (/^(md|txt)$/.test(ext)) inferredCategory = "Notes";
+      }
+
+      snippets.push({ title, category: inferredCategory, originalCategory: inferredCategory, content: text.slice(0, 10000), checked: true });
+    }
+  }
+
+  return snippets;
+}
+
+function getZipUploadMode() {
+  return zipModeExtract && zipModeExtract.checked ? "extract" : "full";
+}
+
+function updateZipModalModeUI() {
+  const isFull = getZipUploadMode() === "full";
+  if (zipFullDetailsSection) zipFullDetailsSection.classList.toggle("hidden", !isFull || !currentZipFile);
+  if (zipPreviewSection) zipPreviewSection.classList.toggle("hidden", isFull || !currentZipFile || parsedZipSnippets.length === 0);
+
+  if (isFull) {
+    if (confirmZipImportBtn) confirmZipImportBtn.disabled = !currentZipFile;
+    const btnText = confirmZipImportBtn ? confirmZipImportBtn.querySelector(".btn-text") : null;
+    if (btnText) btnText.textContent = "Save Full ZIP File";
+    if (zipCategoryOption && (zipCategoryOption.value === "auto" || !zipCategoryOption.value)) {
+      zipCategoryOption.value = "ZIP Archive";
+    }
+  } else {
+    if (zipCategoryOption && zipCategoryOption.value === "ZIP Archive") {
+      zipCategoryOption.value = "auto";
+    }
+    updateConfirmButtonCount();
+  }
+}
+
+async function saveFullZipSnippet() {
+  hideZipError();
+  if (!currentZipFile) return displayZipError("Please select a ZIP file first.");
+
+  const title = ((zipFullTitle ? zipFullTitle.value.trim() : "") || currentZipFile.name || "archive.zip").slice(0, 100);
+  const selCat = zipCategoryOption ? zipCategoryOption.value : "ZIP Archive";
+  const category = (selCat === "auto" ? "ZIP Archive" : normalizeCategory(selCat)) || "ZIP Archive";
+
+  setImportingState(true);
+  try {
+    const fileEntries = currentZipFilesMeta.map((f) => ({ name: f.name, size: f.size }));
+    let base64Data = "";
+    if (currentZipFile.size <= 6500) {
+      try { base64Data = await readFileAsBase64(currentZipFile); } catch {}
+    }
+
+    const descriptor = { __quickcopy_zip__: true, fileName: currentZipFile.name, fileSize: currentZipFile.size, fileCount: fileEntries.length, files: fileEntries };
+    if (base64Data) descriptor.base64 = base64Data;
+
+    let contentString = JSON.stringify(descriptor);
+    if (contentString.length > 9500 && descriptor.base64) {
+      delete descriptor.base64;
+      contentString = JSON.stringify(descriptor);
+    }
+    if (contentString.length > 9500) {
+      descriptor.files = fileEntries.slice(0, 40).map((f) => ({ name: f.name.slice(0, 80), size: f.size }));
+      contentString = JSON.stringify(descriptor);
+    }
+    if (contentString.length > 9900) {
+      descriptor.files = [];
+      contentString = JSON.stringify(descriptor);
+    }
+
+    const now = Date.now();
+    if (isDemoMode) {
+      const snippetId = `demo-${now}`;
+      const newSnippet = { id: snippetId, title, category, content: contentString, created_at: new Date().toISOString() };
+      await saveZipBlobToDB(snippetId, currentZipBlob || currentZipFile);
+      allSnippets.unshift(newSnippet);
+      saveDemoSnippets();
+    } else {
+      const payload = [{ title, category, content: contentString }];
+      const { data, error } = await supabaseClient.from("snippets").insert(payload).select();
+      if (error) {
+        console.error("[QuickCopy Supabase Full ZIP Error]", error);
+        setImportingState(false);
+        return displayZipError("Could not save snippets to the database.\nPlease try again.");
+      }
+      const created = (data && data[0]) || { id: `zip-${now}`, title, category, content: contentString, created_at: new Date().toISOString() };
+      if (created.id) await saveZipBlobToDB(created.id, currentZipBlob || currentZipFile);
+      allSnippets.unshift(created);
+    }
+
+    setImportingState(false);
+    closeZipModal();
+    filterSnippets();
+    showToast("Saved full ZIP file!");
+  } catch (err) {
+    console.error("[QuickCopy] Error saving full ZIP:", err);
+    setImportingState(false);
+    displayZipError("Could not save snippets to the database.\nPlease try again.");
+  }
+}
+
 function applyZipCategoryOptionChange() {
   if (!zipCategoryOption || parsedZipSnippets.length === 0) return;
   const selCat = zipCategoryOption.value;
-
-  parsedZipSnippets.forEach((snippet) => {
-    snippet.category = selCat === "auto" ? snippet.originalCategory : selCat;
-  });
-
+  parsedZipSnippets.forEach((s) => { s.category = selCat === "auto" ? s.originalCategory : selCat; });
   renderZipPreview();
 }
 
-/**
- * Toggle checked state of all snippets in the ZIP preview.
- */
 function toggleSelectAllZipSnippets(checked) {
   parsedZipSnippets.forEach((s) => (s.checked = checked));
   if (zipPreviewList) {
-    const checkboxes = zipPreviewList.querySelectorAll(".zip-preview-item-checkbox");
-    checkboxes.forEach((cb) => (cb.checked = checked));
+    zipPreviewList.querySelectorAll(".zip-preview-item-checkbox").forEach((cb) => (cb.checked = checked));
   }
   updateConfirmButtonCount();
 }
 
-/**
- * Update the "Select All" checkbox state based on individual snippet checkboxes.
- */
 function updateZipSelectAllState() {
   if (!zipSelectAllCheckbox || parsedZipSnippets.length === 0) return;
-  const allChecked = parsedZipSnippets.every((s) => s.checked);
-  const anyChecked = parsedZipSnippets.some((s) => s.checked);
-  zipSelectAllCheckbox.checked = allChecked;
-  zipSelectAllCheckbox.indeterminate = anyChecked && !allChecked;
+  zipSelectAllCheckbox.checked = parsedZipSnippets.every((s) => s.checked);
+  zipSelectAllCheckbox.indeterminate = parsedZipSnippets.some((s) => s.checked) && !zipSelectAllCheckbox.checked;
 }
 
-/**
- * Update the confirm import button text and disabled state.
- */
 function updateConfirmButtonCount() {
   if (!confirmZipImportBtn) return;
-  const checkedCount = parsedZipSnippets.filter((s) => s.checked).length;
-  confirmZipImportBtn.disabled = checkedCount === 0;
+  const count = parsedZipSnippets.filter((s) => s.checked).length;
+  confirmZipImportBtn.disabled = count === 0;
   const btnText = confirmZipImportBtn.querySelector(".btn-text");
-  if (btnText) {
-    btnText.textContent = checkedCount > 0
-      ? `Import (${checkedCount}) Snippet${checkedCount === 1 ? "" : "s"}`
-      : "Import Snippets";
-  }
+  if (btnText) btnText.textContent = count > 0 ? `Import (${count}) Snippet${count === 1 ? "" : "s"}` : "Import Snippets";
 }
 
-/**
- * Render the extracted snippets preview safely in the ZIP modal.
- * STRICT XSS: Uses document.createElement and textContent exclusively.
- */
 function renderZipPreview() {
   if (!zipPreviewList || !zipPreviewSection) return;
-
   zipPreviewList.innerHTML = "";
   const totalCount = parsedZipSnippets.length;
-
   zipPreviewSummary.textContent = `Found ${totalCount} snippet${totalCount === 1 ? "" : "s"}`;
   updateZipSelectAllState();
 
   parsedZipSnippets.forEach((snippet) => {
-    const item = document.createElement("div");
-    item.className = "zip-preview-item";
-
-    const checkbox = document.createElement("input");
+    const checkbox = makeEl("input", "zip-preview-item-checkbox");
     checkbox.type = "checkbox";
-    checkbox.className = "zip-preview-item-checkbox";
     checkbox.checked = !!snippet.checked;
     checkbox.setAttribute("aria-label", `Select snippet "${snippet.title}"`);
     checkbox.addEventListener("change", () => {
@@ -1777,41 +1388,20 @@ function renderZipPreview() {
       updateConfirmButtonCount();
       hideZipError();
     });
-    item.appendChild(checkbox);
 
-    const contentWrapper = document.createElement("div");
-    contentWrapper.className = "zip-preview-item-content";
-
-    const headerRow = document.createElement("div");
-    headerRow.className = "zip-preview-item-header";
-
-    const titleEl = document.createElement("span");
-    titleEl.className = "zip-preview-title";
-    titleEl.textContent = snippet.title || "Untitled Snippet";
-    titleEl.title = snippet.title || "";
-    headerRow.appendChild(titleEl);
-
-    const catBadge = document.createElement("span");
     const cat = snippet.category || "General";
-    const catSlug = cat.toLowerCase().replace(/[^a-z0-9]/g, "");
-    catBadge.className = `category-badge badge-${catSlug}`;
-    catBadge.textContent = cat;
-    headerRow.appendChild(catBadge);
-
-    const charBadge = document.createElement("span");
-    charBadge.className = "zip-preview-chars";
-    charBadge.textContent = `${(snippet.content || "").length} chars`;
-    headerRow.appendChild(charBadge);
-
-    contentWrapper.appendChild(headerRow);
-
-    const preSnippet = document.createElement("pre");
-    preSnippet.className = "zip-preview-snippet";
     const raw = snippet.content || "";
-    preSnippet.textContent = raw.length > 200 ? raw.slice(0, 200) + "..." : raw;
-    contentWrapper.appendChild(preSnippet);
-
-    item.appendChild(contentWrapper);
+    const item = makeEl("div", "zip-preview-item", undefined, [
+      checkbox,
+      makeEl("div", "zip-preview-item-content", undefined, [
+        makeEl("div", "zip-preview-item-header", undefined, [
+          makeEl("span", "zip-preview-title", snippet.title || "Untitled Snippet"),
+          makeEl("span", `category-badge badge-${cat.toLowerCase().replace(/[^a-z0-9]/g, "")}`, cat),
+          makeEl("span", "zip-preview-chars", `${raw.length} chars`)
+        ]),
+        makeEl("pre", "zip-preview-snippet", raw.length > 200 ? raw.slice(0, 200) + "..." : raw)
+      ])
+    ]);
     zipPreviewList.appendChild(item);
   });
 
@@ -1819,25 +1409,17 @@ function renderZipPreview() {
   updateConfirmButtonCount();
 }
 
-/**
- * Import the selected snippets into the active database (Supabase or Demo localStorage).
- */
 async function importSelectedZipSnippets() {
   hideZipError();
   const selectedSnippets = parsedZipSnippets.filter((s) => s.checked);
-
-  if (selectedSnippets.length === 0) {
-    displayZipError("Please select at least one snippet to import.");
-    return;
-  }
+  if (selectedSnippets.length === 0) return displayZipError("Please select at least one snippet to import.");
 
   setImportingState(true);
+  const now = Date.now();
 
-  // Demo Mode (localStorage: quickcopy_demo_snippets)
   if (isDemoMode) {
     setTimeout(() => {
       try {
-        const now = Date.now();
         const createdItems = selectedSnippets.map((s, idx) => ({
           id: `demo-${now}-${idx}`,
           title: s.title,
@@ -1845,10 +1427,8 @@ async function importSelectedZipSnippets() {
           content: s.content,
           created_at: new Date(now - idx * 1000).toISOString()
         }));
-
         allSnippets.unshift(...createdItems);
-        localStorage.setItem("quickcopy_demo_snippets", JSON.stringify(allSnippets));
-
+        saveDemoSnippets();
         setImportingState(false);
         closeZipModal();
         filterSnippets();
@@ -1862,38 +1442,25 @@ async function importSelectedZipSnippets() {
     return;
   }
 
-  // Live Supabase Insertion
   try {
-    const payload = selectedSnippets.map((s) => ({
-      title: s.title,
-      category: s.category,
-      content: s.content
-    }));
-
-    const { data, error } = await supabaseClient
-      .from("snippets")
-      .insert(payload)
-      .select();
-
+    const payload = selectedSnippets.map((s) => ({ title: s.title, category: s.category, content: s.content }));
+    const { data, error } = await supabaseClient.from("snippets").insert(payload).select();
     if (error) {
       console.error("[QuickCopy Supabase Import Error]", error);
       setImportingState(false);
-      displayZipError("Could not save snippets to the database.\nPlease try again.");
-      return;
+      return displayZipError("Could not save snippets to the database.\nPlease try again.");
     }
 
     if (data && data.length > 0) {
       allSnippets.unshift(...data);
     } else {
-      const now = Date.now();
-      const fallbackItems = selectedSnippets.map((s, idx) => ({
+      allSnippets.unshift(...selectedSnippets.map((s, idx) => ({
         id: `imported-${now}-${idx}`,
         title: s.title,
         category: s.category,
         content: s.content,
         created_at: new Date().toISOString()
-      }));
-      allSnippets.unshift(...fallbackItems);
+      })));
     }
 
     setImportingState(false);
