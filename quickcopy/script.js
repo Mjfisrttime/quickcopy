@@ -179,7 +179,10 @@ function setupEventListeners() {
 
   if (zipDropzone) {
     const stopEv = (e) => { e.preventDefault(); e.stopPropagation(); };
-    on(zipDropzone, "click", () => { if (zipFileInput) zipFileInput.click(); });
+    on(zipDropzone, "click", (e) => {
+      if (e.target === zipFileInput) return;
+      if (zipFileInput) zipFileInput.click();
+    });
     on(zipDropzone, "keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (zipFileInput) zipFileInput.click(); }
     });
@@ -192,6 +195,8 @@ function setupEventListeners() {
       if (files && files.length > 0) handleSelectedZipFile(files[0]);
     });
   }
+
+  if (zipFileInput) on(zipFileInput, "click", (e) => e.stopPropagation());
 
   on(zipFileInput, "change", () => {
     if (zipFileInput.files && zipFileInput.files.length > 0) handleSelectedZipFile(zipFileInput.files[0]);
@@ -269,7 +274,10 @@ async function loadSnippets() {
     setTimeout(() => {
       try {
         const stored = localStorage.getItem("quickcopy_demo_snippets");
-        allSnippets = stored ? JSON.parse(stored) : [...INITIAL_DEMO_SNIPPETS];
+        allSnippets = (stored ? JSON.parse(stored) : [...INITIAL_DEMO_SNIPPETS]).map((s) => {
+          if (isFullZipSnippet(s)) s.category = "ZIP Archive";
+          return s;
+        });
         if (!stored) saveDemoSnippets();
         allSnippets.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         loadingState.classList.add("hidden");
@@ -294,7 +302,10 @@ async function loadSnippets() {
       showErrorState("Unable to load snippets.\n\nPlease refresh the page and try again.");
       return;
     }
-    allSnippets = data || [];
+    allSnippets = (data || []).map((s) => {
+      if (isFullZipSnippet(s)) s.category = "ZIP Archive";
+      return s;
+    });
     filterSnippets();
   } catch (err) {
     console.error("[QuickCopy Network Error]", err);
@@ -633,7 +644,7 @@ async function createSnippet() {
   try {
     const { data, error } = await supabaseClient
       .from("snippets")
-      .insert([{ title, category, content }])
+      .insert([{ title, category: toDbCategory(category), content }])
       .select();
 
     if (error) {
@@ -650,6 +661,7 @@ async function createSnippet() {
       content,
       created_at: new Date().toISOString()
     };
+    if (isFullZipSnippet(insertedSnippet)) insertedSnippet.category = "ZIP Archive";
     allSnippets.unshift(insertedSnippet);
     setSavingState(false);
     closeModal();
@@ -1031,10 +1043,13 @@ async function extractAndSplitZipSnippet(snippet, buttonElement) {
       allSnippets.unshift(...items);
       saveDemoSnippets();
     } else {
-      const payload = extracted.map((s) => ({ title: s.title, category: s.category, content: s.content }));
+      const payload = extracted.map((s) => ({ title: s.title, category: toDbCategory(s.category), content: s.content }));
       const { data } = await supabaseClient.from("snippets").insert(payload).select();
-      if (data && data.length > 0) allSnippets.unshift(...data);
-      else allSnippets.unshift(...extracted.map((s, idx) => ({ id: `ext-${now}-${idx}`, title: s.title, category: s.category, content: s.content, created_at: new Date().toISOString() })));
+      if (data && data.length > 0) {
+        allSnippets.unshift(...data.map((s) => { if (isFullZipSnippet(s)) s.category = "ZIP Archive"; return s; }));
+      } else {
+        allSnippets.unshift(...extracted.map((s, idx) => ({ id: `ext-${now}-${idx}`, title: s.title, category: s.category, content: s.content, created_at: new Date().toISOString() })));
+      }
     }
 
     filterSnippets();
@@ -1094,6 +1109,7 @@ function resetZipModalState() {
 }
 
 function displayZipError(msg) {
+  if (zipFileInput) zipFileInput.value = "";
   if (!zipError) return;
   zipError.textContent = msg;
   zipError.classList.remove("hidden");
@@ -1110,6 +1126,11 @@ function setImportingState(isImporting) {
   confirmZipImportBtn.disabled = isImporting;
   const btnText = confirmZipImportBtn.querySelector(".btn-text");
   if (btnText) btnText.textContent = isImporting ? "Importing..." : "Import Snippets";
+}
+
+function toDbCategory(cat) {
+  const valid = ["General", "Programming", "Thesis", "Assignment", "Commands", "Notes", "Links", "Other"];
+  return valid.includes(cat) ? cat : "Other";
 }
 
 function normalizeCategory(cat) {
@@ -1222,7 +1243,7 @@ async function extractTextSnippetsFromZip(zip) {
       if (!fileName || fileName.startsWith(".")) continue;
 
       const lowerName = fileName.toLowerCase();
-      if (["readme.txt", "readme.md", "snippet.json", "snippets.json", "quickcopy-backup.json"].includes(lowerName)) continue;
+      if (["readme.txt", "snippet.json", "snippets.json", "quickcopy-backup.json"].includes(lowerName)) continue;
 
       const dotIdx = fileName.lastIndexOf(".");
       const ext = dotIdx >= 0 ? fileName.slice(dotIdx + 1).toLowerCase() : "";
@@ -1241,7 +1262,7 @@ async function extractTextSnippetsFromZip(zip) {
         if (m) { inferredCategory = m; break; }
       }
       if (inferredCategory === "General") {
-        if (/^(js|ts|jsx|tsx|py|html?|css|c|cpp|cs|java|go|rs|php|rb)$/.test(ext)) inferredCategory = "Programming";
+        if (/^(js|ts|jsx|tsx|py|html?|css|c|cpp|cs|java|go|rs|php|rb|json|ya?ml|xml)$/.test(ext)) inferredCategory = "Programming";
         else if (/^(sh|bash|bat|cmd|ps1|sql)$/.test(ext)) inferredCategory = "Commands";
         else if (/^(md|txt)$/.test(ext)) inferredCategory = "Notes";
       }
@@ -1318,14 +1339,15 @@ async function saveFullZipSnippet() {
       allSnippets.unshift(newSnippet);
       saveDemoSnippets();
     } else {
-      const payload = [{ title, category, content: contentString }];
+      const payload = [{ title, category: toDbCategory(category), content: contentString }];
       const { data, error } = await supabaseClient.from("snippets").insert(payload).select();
       if (error) {
         console.error("[QuickCopy Supabase Full ZIP Error]", error);
         setImportingState(false);
         return displayZipError("Could not save snippets to the database.\nPlease try again.");
       }
-      const created = (data && data[0]) || { id: `zip-${now}`, title, category, content: contentString, created_at: new Date().toISOString() };
+      const created = (data && data[0]) || { id: `zip-${now}`, title, category: "ZIP Archive", content: contentString, created_at: new Date().toISOString() };
+      created.category = "ZIP Archive";
       if (created.id) await saveZipBlobToDB(created.id, currentZipBlob || currentZipFile);
       allSnippets.unshift(created);
     }
@@ -1443,7 +1465,7 @@ async function importSelectedZipSnippets() {
   }
 
   try {
-    const payload = selectedSnippets.map((s) => ({ title: s.title, category: s.category, content: s.content }));
+    const payload = selectedSnippets.map((s) => ({ title: s.title, category: toDbCategory(s.category), content: s.content }));
     const { data, error } = await supabaseClient.from("snippets").insert(payload).select();
     if (error) {
       console.error("[QuickCopy Supabase Import Error]", error);
@@ -1452,7 +1474,7 @@ async function importSelectedZipSnippets() {
     }
 
     if (data && data.length > 0) {
-      allSnippets.unshift(...data);
+      allSnippets.unshift(...data.map((s) => { if (isFullZipSnippet(s)) s.category = "ZIP Archive"; return s; }));
     } else {
       allSnippets.unshift(...selectedSnippets.map((s, idx) => ({
         id: `imported-${now}-${idx}`,
@@ -1472,4 +1494,8 @@ async function importSelectedZipSnippets() {
     setImportingState(false);
     displayZipError("Could not save snippets to the database.\nPlease try again.");
   }
+}
+
+if (typeof window !== "undefined") {
+  window.toDbCategory = toDbCategory;
 }
