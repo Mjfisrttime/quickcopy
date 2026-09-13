@@ -784,18 +784,18 @@ async function runAllSuites() {
     assertEqual(zipErrorEl.textContent, 'No valid text or code snippets found in this ZIP archive.');
   });
 
-  await s4.testAsync('Error 4.3: File size exceeding 25MB limit rejected before unzipping', async () => {
+  await s4.testAsync('Error 4.3: File size exceeding 1GB limit rejected before unzipping', async () => {
     const { sandbox, elements } = createScriptSandbox();
     const zipErrorEl = elements.get('zipError');
 
     const oversizedFile = {
       name: 'giant.zip',
-      size: 26 * 1024 * 1024 // 26MB > 25MB
+      size: 1024 * 1024 * 1024 + 1024 // > 1GB
     };
 
     await sandbox.handleSelectedZipFile(oversizedFile);
 
-    assertEqual(zipErrorEl.textContent, 'File exceeds the 25MB size limit. Please choose a smaller ZIP archive.');
+    assertEqual(zipErrorEl.textContent, 'File exceeds the 1GB size limit. Please choose a smaller ZIP archive.');
   });
 
   await s4.testAsync('Error 4.4: Non-zip file selection is rejected with clear instruction', async () => {
@@ -1094,6 +1094,31 @@ async function runAllSuites() {
     const parsed = sandbox.__getParsedZipSnippets();
     assertEqual(parsed.length, 1, 'Null-byte file discarded');
     assertEqual(parsed[0].title, 'clean_note', 'Clean note extracted');
+  });
+
+  await s7.testAsync('Security 7.6: Individual files exceeding 100MB uncompressed limit are safely discarded', async () => {
+    const { sandbox } = createScriptSandbox();
+
+    const mockZip = {
+      files: {
+        'huge_script.js': {
+          name: 'huge_script.js',
+          dir: false,
+          _data: { uncompressedSize: 150 * 1024 * 1024 }, // 150MB > 100MB
+          async: () => { throw new Error('Should not decompress >100MB file'); }
+        },
+        'small_script.js': {
+          name: 'small_script.js',
+          dir: false,
+          _data: { uncompressedSize: 200 },
+          async: async () => 'console.log("safe small script");'
+        }
+      }
+    };
+
+    const extracted = await sandbox.extractTextSnippetsFromZip(mockZip);
+    assertEqual(extracted.length, 1, 'Only files under 100MB are extracted');
+    assertEqual(extracted[0].title, 'small_script', 'Small script successfully extracted');
   });
 
   // ============================================================================

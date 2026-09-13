@@ -1143,7 +1143,8 @@ async function handleSelectedZipFile(file) {
   hideZipError();
   if (!file) return;
   if (!file.name || !file.name.toLowerCase().endsWith(".zip")) return displayZipError("Please select a valid .zip file archive.");
-  if (file.size > 25 * 1024 * 1024) return displayZipError("File exceeds the 25MB size limit. Please choose a smaller ZIP archive.");
+  const MAX_ZIP_FILE_SIZE = 1024 * 1024 * 1024; // 1GB (1,073,741,824 bytes)
+  if (file.size > MAX_ZIP_FILE_SIZE) return displayZipError("File exceeds the 1GB size limit. Please choose a smaller ZIP archive.");
 
   zipFileName.textContent = file.name;
   zipFileSize.textContent = `(${formatBytes(file.size)})`;
@@ -1203,6 +1204,7 @@ async function handleSelectedZipFile(file) {
 async function extractTextSnippetsFromZip(zip) {
   const snippets = [];
   const MAX_LIMIT = 250;
+  const MAX_EXTRACT_ENTRY_SIZE = 100 * 1024 * 1024; // 100MB per file entry capacity
 
   const backupKey = Object.keys(zip.files).find((k) => {
     const name = k.toLowerCase().replace(/\\/g, "/").split("/").pop();
@@ -1211,18 +1213,24 @@ async function extractTextSnippetsFromZip(zip) {
 
   if (backupKey && !zip.files[backupKey].dir) {
     try {
-      const parsed = JSON.parse(await zip.files[backupKey].async("string"));
-      const items = Array.isArray(parsed) ? parsed : [parsed];
+      const backupEntry = zip.files[backupKey];
+      const backupSize = (backupEntry._data && typeof backupEntry._data.uncompressedSize === "number")
+        ? backupEntry._data.uncompressedSize
+        : (typeof backupEntry.uncompressedSize === "number" ? backupEntry.uncompressedSize : 0);
+      if (backupSize <= MAX_EXTRACT_ENTRY_SIZE) {
+        const parsed = JSON.parse(await backupEntry.async("string"));
+        const items = Array.isArray(parsed) ? parsed : [parsed];
 
-      for (const item of items) {
-        if (snippets.length >= MAX_LIMIT) break;
-        if (!item || typeof item !== "object") continue;
-        const rawTitle = typeof item.title === "string" ? item.title.trim() : "";
-        const title = rawTitle.slice(0, 100) || "Imported Snippet";
-        const rawContent = typeof item.content === "string" ? item.content : "";
-        if (!rawContent.trim()) continue;
-        const origCategory = normalizeCategory(item.category);
-        snippets.push({ title, category: origCategory, originalCategory: origCategory, content: rawContent.slice(0, 10000), checked: true });
+        for (const item of items) {
+          if (snippets.length >= MAX_LIMIT) break;
+          if (!item || typeof item !== "object") continue;
+          const rawTitle = typeof item.title === "string" ? item.title.trim() : "";
+          const title = rawTitle.slice(0, 100) || "Imported Snippet";
+          const rawContent = typeof item.content === "string" ? item.content : "";
+          if (!rawContent.trim()) continue;
+          const origCategory = normalizeCategory(item.category);
+          snippets.push({ title, category: origCategory, originalCategory: origCategory, content: rawContent.slice(0, 10000), checked: true });
+        }
       }
     } catch (e) {
       console.warn("[QuickCopy] Backup parse fallback:", e);
@@ -1249,9 +1257,14 @@ async function extractTextSnippetsFromZip(zip) {
       const ext = dotIdx >= 0 ? fileName.slice(dotIdx + 1).toLowerCase() : "";
       if (binaryExts.has(ext)) continue;
 
+      const entrySize = (entry._data && typeof entry._data.uncompressedSize === "number")
+        ? entry._data.uncompressedSize
+        : (typeof entry.uncompressedSize === "number" ? entry.uncompressedSize : 0);
+      if (entrySize > MAX_EXTRACT_ENTRY_SIZE) continue;
+
       let text = "";
       try { text = await entry.async("string"); } catch { continue; }
-      if (!text || !text.trim() || text.includes("\0")) continue;
+      if (!text || !text.trim() || text.includes("\0") || text.length > MAX_EXTRACT_ENTRY_SIZE) continue;
 
       const baseName = dotIdx > 0 ? fileName.slice(0, dotIdx) : fileName;
       const title = baseName.trim().slice(0, 100) || "Imported Snippet";

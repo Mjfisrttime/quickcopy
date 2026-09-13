@@ -95,7 +95,7 @@ QuickCopy includes a comprehensive client-side ZIP packaging and restore system 
 - **Category Assignment**:
   - Allows selecting **"Auto-detect from files"**, **"ZIP Archive"**, or explicit category overrides.
 - **Safety Checks & Protections**:
-  - **File Size Limit**: Rejects files larger than 25MB to prevent memory exhaustion and zip bomb attacks.
+  - **File Size Limit**: Rejects files larger than 1GB to prevent memory exhaustion and zip bomb attacks.
   - **Path Traversal Protection**: Explicitly validates all file paths to ensure no relative `../` or `..\` traversal escapes.
   - **Binary File Exclusion**: Automatically ignores images, executables, compiled binaries, and compressed archives.
   - **System File Filtering**: Automatically ignores macOS resource forks (`__MACOSX`), `.DS_Store`, `.git`, and dotfiles.
@@ -286,7 +286,7 @@ QuickCopy is built with security-first web standards:
    - An invisible, non-intrusive `document.execCommand('copy')` fallback ensures compatibility in non-HTTPS local environments or older browser engines.
 
 5. **ZIP Archive Security**:
-   - 25MB archive size cap guards against zip bombs and denial-of-service memory exhaustion.
+   - 1GB archive size cap guards against zip bombs and denial-of-service memory exhaustion.
    - Strict path traversal defense rejects any entries with `../` or `..\`.
    - File filtering automatically rejects executable/binary payloads.
 
