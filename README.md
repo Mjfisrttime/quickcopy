@@ -10,14 +10,15 @@
 1. [Introduction](#1-introduction)
 2. [Features](#2-features)
 3. [ZIP File Import & Export System](#3-zip-file-import--export-system)
-4. [Supabase Project Setup](#4-supabase-project-setup)
-5. [Database Schema & SQL Table Creation](#5-database-schema--sql-table-creation)
-6. [Row Level Security (RLS) Policies](#6-row-level-security-rls-policies)
-7. [Configuring Credentials in QuickCopy](#7-configuring-credentials-in-quickcopy)
-8. [Running Locally](#8-running-locally)
-9. [Deployment Options](#9-deployment-options)
-10. [Security Architecture & Design Principles](#10-security-architecture--design-principles)
-11. [Troubleshooting & FAQ](#11-troubleshooting--faq)
+4. [QuickLink Direct Sharing & QR Code System](#4-quicklink-direct-sharing--qr-code-system)
+5. [Supabase Project Setup](#5-supabase-project-setup)
+6. [Database Schema & SQL Table Creation](#6-database-schema--sql-table-creation)
+7. [Row Level Security (RLS) Policies](#7-row-level-security-rls-policies)
+8. [Configuring Credentials in QuickCopy](#8-configuring-credentials-in-quickcopy)
+9. [Running Locally](#9-running-locally)
+10. [Deployment Options](#10-deployment-options)
+11. [Security Architecture & Design Principles](#11-security-architecture--design-principles)
+12. [Troubleshooting & FAQ](#12-troubleshooting--faq)
 
 ---
 
@@ -44,6 +45,7 @@ QuickCopy is built with:
 - **📱 Mobile-First Responsive Design**: Flawless layout on mobile phones, tablets, and ultra-wide desktop monitors.
 - **🛡️ Rock-Solid XSS Protection**: Strict DOM node manipulation (`document.createElement` & `textContent`); zero dynamic `innerHTML` injection of user data.
 - **🔄 Expandable Previews**: Snippets with more than 6 lines or 300 characters are neatly folded with a smooth `"Show more ▼"` / `"Show less ▲"` toggle.
+- **⚡ QuickLink Direct Sharing & QR Code**: Generate shareable URLs (`?copy=` or `?dl=`) with client-side hash payloads (`#q=...`) and scannable QR codes for fast phone and cross-device transfers.
 - **💾 Offline / Local Demo Fallback**: Automatically activates when placeholder credentials are used, persisting your test snippets in browser `localStorage`.
 
 ---
@@ -106,7 +108,31 @@ QuickCopy includes a comprehensive client-side ZIP packaging and restore system 
 
 ---
 
-## 4. Supabase Project Setup
+---
+
+## 4. QuickLink Direct Sharing & QR Code System
+
+QuickCopy features a seamless, zero-friction cross-device snippet transfer system called **QuickLink**:
+
+### 4.1 How QuickLink Works
+- **Share Button on Every Card ("🔗 Link")**: Clicking the link button opens the **Share QuickLink** modal.
+- **Header Toolbar Button ("⚡ QuickLink")**: Located in the main toolbar (#quickLinkToolbarBtn), allowing anyone to open, paste, or test any QuickLink URL.
+- **Two Action Modes**:
+  - **⚡ Auto-Copy Link**: Opening the link automatically copies snippet content to the recipient's clipboard and displays a visual confirmation.
+  - **📥 Auto-Download Link**: Opening the link triggers an instant ZIP archive download of the snippet or archive.
+- **Zero-Server Client Hash Payloads (`#q=...`)**: Snippet text, titles, and categories are base64url-encoded directly into the URL hash, allowing instant sharing without needing a shared database or active internet backend.
+
+### 4.2 Scannable QR Codes for Phone & Tablet Transfers
+- The QuickLink modal automatically generates a scannable **QR code** for mobile devices.
+- Simply open QuickCopy on your computer, click **"⚡ QuickLink"** (or **"🔗 Link"** on any card), and scan the QR code with your phone or tablet camera to instantly transfer and copy code across devices.
+
+### 4.3 Cross-Device ZIP Handling & Integrity
+- **Text & Code Archives**: Automatically synchronized across devices with full, non-empty file contents reconstructed on download.
+- **Large Binary Archives**: Binary archives exceeding database limits are safely cached in the uploading device's local IndexedDB. If opened on another device where the binary is not stored, QuickCopy clearly informs the user rather than producing corrupt 0-byte files.
+
+---
+
+## 5. Supabase Project Setup
 
 Follow these steps to create your free Supabase cloud database:
 
@@ -128,7 +154,7 @@ Follow these steps to create your free Supabase cloud database:
 
 ---
 
-## 5. Database Schema & SQL Table Creation
+## 6. Database Schema & SQL Table Creation
 
 1. In your Supabase project dashboard, open the **SQL Editor** from the left navigation bar.
 2. Click **"New query"**.
@@ -159,7 +185,7 @@ CREATE INDEX IF NOT EXISTS idx_snippets_category ON public.snippets (category);
 
 ---
 
-## 6. Row Level Security (RLS) Policies
+## 7. Row Level Security (RLS) Policies
 
 Row Level Security (RLS) ensures that public, anonymous visitors can read snippets and publish new snippets, but **cannot edit, tamper with, or delete existing snippets**.
 
@@ -200,7 +226,7 @@ WITH CHECK (
 
 ---
 
-## 7. Configuring Credentials in QuickCopy
+## 8. Configuring Credentials in QuickCopy
 
 Open `quickcopy/script.js` in your favorite code editor. At the very top of the file, replace the placeholder constants with your actual Supabase URL and Anon Key:
 
@@ -216,7 +242,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
 
 ---
 
-## 8. Running Locally
+## 9. Running Locally
 
 Because QuickCopy is written in vanilla web technologies, you have multiple ways to run it:
 
@@ -244,7 +270,7 @@ Open `http://localhost:3000`.
 
 ---
 
-## 9. Deployment Options
+## 10. Deployment Options
 
 QuickCopy is a 100% static frontend application. You can deploy it for free on any modern web host:
 
@@ -265,7 +291,7 @@ QuickCopy is a 100% static frontend application. You can deploy it for free on a
 
 ---
 
-## 10. Security Architecture & Design Principles
+## 11. Security Architecture & Design Principles
 
 QuickCopy is built with security-first web standards:
 
@@ -292,7 +318,7 @@ QuickCopy is built with security-first web standards:
 
 ---
 
-## 11. Troubleshooting & FAQ
+## 12. Troubleshooting & FAQ
 
 ### Q: Why does the top banner say "Demo Mode"?
 A: This occurs when `SUPABASE_URL` or `SUPABASE_ANON_KEY` in `script.js` still contain the placeholder strings. To switch to your cloud database, follow [Section 7](#7-configuring-credentials-in-quickcopy).
